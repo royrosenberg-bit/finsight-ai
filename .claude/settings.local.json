@@ -5,7 +5,8 @@
       "Bash(brew update-reset:*)",
       "Bash(curl -s http://localhost:5173)",
       "Bash(xargs kill:*)",
-      "Bash(kill -9 95121 95123)"
+      "Bash(kill -9 95121 95123)",
+      "Bash(xargs sed:*)"
     ]
   }
 }

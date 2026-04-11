@@ -3,7 +3,7 @@ import axios from 'axios'
 import StockCard from '../components/StockCard'
 import { CardSkeleton } from '../components/Skeleton'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 const TRENDING = ['AAPL', 'TSLA', 'NVDA', 'META', 'MSFT', 'AMZN', 'GOOGL', 'AMD']
 

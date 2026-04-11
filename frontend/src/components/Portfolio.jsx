@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const STORAGE_KEY = 'finsight_portfolio'
 const SECTOR_COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#a855f7','#f97316','#84cc16']
 

@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 // ── Design tokens ──────────────────────────────────────────────────────────
 const CONF = {

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444']
 const PERIODS = ['1W', '1M', '3M', '6M', '1Y']
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 export default function MarketBar() {
   const [indices, setIndices] = useState([])

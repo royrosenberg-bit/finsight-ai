@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const STORAGE_KEY = 'finsight_watchlist'
 
 const SEVERITY_CONFIG = {

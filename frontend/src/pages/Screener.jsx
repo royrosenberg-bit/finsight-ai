@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import { TableSkeleton } from '../components/Skeleton'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 function fmt(val, prefix = '') {
   if (val == null) return '—'

@@ -19,7 +19,7 @@ import Alerts from './pages/Alerts'
 import DCF from './pages/DCF'
 import axios from 'axios'
 
-const API = 'http://localhost:8000/api'
+const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 export default function App() {
   const [page, setPage] = useState('home')

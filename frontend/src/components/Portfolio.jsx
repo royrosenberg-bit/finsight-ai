@@ -51,6 +51,7 @@ export default function Portfolio({ onSelectStock }) {
   const [stockMeta, setStockMeta] = useState({})
   const [form, setForm] = useState({ symbol: '', shares: '', buyPrice: '' })
   const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState(null)
   const [tab, setTab] = useState('holdings')
   const [analysis, setAnalysis] = useState(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -72,10 +73,15 @@ export default function Portfolio({ onSelectStock }) {
 
   async function handleAdd(e) {
     e.preventDefault()
+    setAddError(null)
     const sym = form.symbol.trim().toUpperCase()
     const shares = parseFloat(form.shares)
     const buyPrice = parseFloat(form.buyPrice)
-    if (!sym || isNaN(shares) || isNaN(buyPrice)) return
+    if (!sym) return setAddError('Please enter a stock symbol.')
+    if (!/^[A-Z]{1,5}$/.test(sym)) return setAddError(`"${sym}" doesn't look like a valid ticker (1–5 letters).`)
+    if (holdings.some(h => h.symbol === sym)) return setAddError(`${sym} is already in your portfolio.`)
+    if (isNaN(shares) || shares <= 0) return setAddError('Shares must be a positive number.')
+    if (isNaN(buyPrice) || buyPrice <= 0) return setAddError('Buy price must be a positive number.')
     add({ symbol: sym, shares, buyPrice })
     setForm({ symbol: '', shares: '', buyPrice: '' })
     setAdding(false)
@@ -135,7 +141,7 @@ export default function Portfolio({ onSelectStock }) {
               {analyzing ? '⏳ Analyzing…' : '✨ AI Analysis'}
             </button>
           )}
-          <button onClick={() => setAdding(!adding)} style={{
+          <button onClick={() => { setAdding(!adding); setAddError(null) }} style={{
             padding: '10px 18px', borderRadius: '10px', border: 'none',
             background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer',
           }}>+ Add Stock</button>
@@ -178,6 +184,11 @@ export default function Portfolio({ onSelectStock }) {
           borderRadius: '16px', padding: '20px', marginBottom: '20px',
           display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end',
         }}>
+          {addError && (
+            <div style={{ width: '100%', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#fca5a5' }}>
+              {addError}
+            </div>
+          )}
           {[
             { key: 'symbol', label: 'Symbol', placeholder: 'AAPL' },
             { key: 'shares', label: 'Shares', placeholder: '10' },

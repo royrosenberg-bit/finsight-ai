@@ -7,6 +7,17 @@ const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 const TRENDING = ['AAPL', 'TSLA', 'NVDA', 'META', 'MSFT', 'AMZN', 'GOOGL', 'AMD']
 
+function formatPct(val) {
+  if (val == null) return '—'
+  const n = parseFloat(val)
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
+}
+
+function formatPrice(val) {
+  if (val == null) return '—'
+  return `$${parseFloat(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 function IndexCard({ name, price, changePct }) {
   const isPos = changePct >= 0
   const color = isPos ? 'var(--green)' : 'var(--red)'
@@ -15,24 +26,46 @@ function IndexCard({ name, price, changePct }) {
     <div className="card" style={{ flex: 1, minWidth: 160 }}>
       <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>{name}</p>
       <p style={{ fontSize: '22px', fontWeight: 700 }}>
-        {price?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '—'}
+        {price != null ? price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
       </p>
       {changePct != null && (
         <span style={{ fontSize: '13px', fontWeight: 600, color, background: bg, padding: '2px 8px', borderRadius: '20px', display: 'inline-block', marginTop: 6 }}>
-          {isPos ? '+' : ''}{changePct}%
+          {formatPct(changePct)}
         </span>
       )}
     </div>
   )
 }
 
+function MoverRow({ s, color, onSelectStock }) {
+  return (
+    <div onClick={() => onSelectStock(s.symbol)} style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'background 0.12s',
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+    >
+      <div>
+        <span style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: 13 }}>{s.symbol}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{formatPrice(s.price)}</span>
+      </div>
+      <span style={{ color, fontWeight: 700, fontSize: 13 }}>{formatPct(s.change_pct)}</span>
+    </div>
+  )
+}
+
 export default function Dashboard({ onSelectStock }) {
   const [indices, setIndices] = useState([])
+  const [indicesLoading, setIndicesLoading] = useState(true)
   const [trending, setTrending] = useState([])
   const [loadingTrending, setLoadingTrending] = useState(true)
 
   useEffect(() => {
-    axios.get(`${API}/indices`).then(r => setIndices(r.data)).catch(() => {})
+    setIndicesLoading(true)
+    axios.get(`${API}/indices`)
+      .then(r => { setIndices(r.data); setIndicesLoading(false) })
+      .catch(() => setIndicesLoading(false))
 
     setLoadingTrending(true)
     Promise.allSettled(
@@ -46,8 +79,16 @@ export default function Dashboard({ onSelectStock }) {
     })
   }, [])
 
-  const gainers = [...trending].sort((a, b) => (b.change_pct ?? -99) - (a.change_pct ?? -99)).slice(0, 4)
-  const losers  = [...trending].sort((a, b) => (a.change_pct ?? 99) - (b.change_pct ?? 99)).slice(0, 4)
+  // Only show actual gainers (positive) and actual losers (negative)
+  const gainers = [...trending]
+    .filter(s => s.change_pct != null && s.change_pct > 0)
+    .sort((a, b) => b.change_pct - a.change_pct)
+    .slice(0, 4)
+
+  const losers = [...trending]
+    .filter(s => s.change_pct != null && s.change_pct < 0)
+    .sort((a, b) => a.change_pct - b.change_pct)
+    .slice(0, 4)
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -58,11 +99,13 @@ export default function Dashboard({ onSelectStock }) {
           Market Overview
         </h2>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-          {indices.length === 0
+          {indicesLoading
             ? [1, 2, 3].map(i => <CardSkeleton key={i} />)
-            : indices.map(idx => (
-              <IndexCard key={idx.name} name={idx.name} price={idx.price} changePct={idx.change_pct} />
-            ))
+            : indices.length === 0
+              ? <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>Market data unavailable</p>
+              : indices.map(idx => (
+                <IndexCard key={idx.name} name={idx.name} price={idx.price} changePct={idx.change_pct} />
+              ))
           }
         </div>
       </section>
@@ -75,7 +118,9 @@ export default function Dashboard({ onSelectStock }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 12 }}>
           {loadingTrending
             ? TRENDING.map(s => <CardSkeleton key={s} />)
-            : trending.map(s => <StockCard key={s.symbol} data={s} onClick={onSelectStock} />)
+            : trending.length === 0
+              ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Could not load trending stocks</p>
+              : trending.map(s => <StockCard key={s.symbol} data={s} onClick={onSelectStock} />)
           }
         </div>
       </section>
@@ -88,46 +133,26 @@ export default function Dashboard({ onSelectStock }) {
             <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--green)', marginBottom: 14 }}>
               📈 Top Gainers
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {gainers.map(s => (
-                <div key={s.symbol} onClick={() => onSelectStock(s.symbol)} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'background 0.12s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div>
-                    <span style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: 13 }}>{s.symbol}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>${s.price}</span>
-                  </div>
-                  <span style={{ color: 'var(--green)', fontWeight: 700, fontSize: 13 }}>+{s.change_pct}%</span>
-                </div>
-              ))}
-            </div>
+            {gainers.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No gainers in this set today</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {gainers.map(s => <MoverRow key={s.symbol} s={s} color="var(--green)" onSelectStock={onSelectStock} />)}
+              </div>
+            )}
           </section>
 
           <section className="card">
             <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--red)', marginBottom: 14 }}>
               📉 Top Losers
             </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {losers.map(s => (
-                <div key={s.symbol} onClick={() => onSelectStock(s.symbol)} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  cursor: 'pointer', padding: '8px 10px', borderRadius: 8, transition: 'background 0.12s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <div>
-                    <span style={{ fontWeight: 700, color: 'var(--accent-light)', fontSize: 13 }}>{s.symbol}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>${s.price}</span>
-                  </div>
-                  <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: 13 }}>{s.change_pct}%</span>
-                </div>
-              ))}
-            </div>
+            {losers.length === 0 ? (
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>No losers in this set today</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {losers.map(s => <MoverRow key={s.symbol} s={s} color="var(--red)" onSelectStock={onSelectStock} />)}
+              </div>
+            )}
           </section>
 
         </div>

@@ -18,8 +18,9 @@ const SECTORS = ['All', 'Technology', 'Healthcare', 'Financial Services', 'Consu
 export default function Screener({ onSelectStock }) {
   const [stocks, setStocks] = useState([])
   const [loading, setLoading] = useState(true)
-  const [sortBy, setSortBy] = useState('symbol')
-  const [sortDir, setSortDir] = useState('asc')
+  const [fetchError, setFetchError] = useState(null)
+  const [sortBy, setSortBy] = useState('market_cap')
+  const [sortDir, setSortDir] = useState('desc')
   const [sector, setSector] = useState('All')
   const [minCap, setMinCap] = useState('')
   const [maxPE, setMaxPE] = useState('')
@@ -27,7 +28,7 @@ export default function Screener({ onSelectStock }) {
   useEffect(() => {
     axios.get(`${API}/screener`)
       .then(r => { setStocks(r.data); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(() => { setFetchError('Could not load screener data.'); setLoading(false) })
   }, [])
 
   function handleSort(col) {
@@ -104,6 +105,14 @@ export default function Screener({ onSelectStock }) {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 20 }}><TableSkeleton rows={10} /></div>
+        ) : fetchError ? (
+          <div style={{ padding: 24, color: '#fca5a5', fontSize: 14 }}>{fetchError}</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 6 }}>No stocks match your filters</p>
+            <p style={{ fontSize: 13 }}>Try widening your criteria or click Reset</p>
+          </div>
         ) : (
           <table>
             <thead>
@@ -130,9 +139,9 @@ export default function Screener({ onSelectStock }) {
                   <tr key={s.symbol} onClick={() => onSelectStock(s.symbol)}>
                     <td style={{ fontWeight: 700, color: 'var(--accent-light)' }}>{s.symbol}</td>
                     <td style={{ color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</td>
-                    <td style={{ fontWeight: 600 }}>{s.price ? `$${s.price}` : '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{s.price != null ? `$${parseFloat(s.price).toFixed(2)}` : '—'}</td>
                     <td style={{ color: s.change_pct != null ? (isPos ? 'var(--green)' : 'var(--red)') : 'var(--text-muted)', fontWeight: 600 }}>
-                      {s.change_pct != null ? `${isPos ? '+' : ''}${s.change_pct}%` : '—'}
+                      {s.change_pct != null ? `${isPos ? '+' : ''}${parseFloat(s.change_pct).toFixed(2)}%` : '—'}
                     </td>
                     <td style={{ color: 'var(--text-secondary)' }}>{fmt(s.market_cap, '$')}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>{s.pe_ratio ? s.pe_ratio.toFixed(1) : '—'}</td>

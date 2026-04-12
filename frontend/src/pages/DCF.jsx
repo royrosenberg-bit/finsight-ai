@@ -711,6 +711,12 @@ export default function DCF() {
                       <AsmInput label="WACC" tipKey="wacc" value={asm.wacc} min={5} max={20} step={0.25} unit="%" onChange={v => set('wacc', v)} onReset={() => { setAsm(p => ({ ...p, wacc: aiOriginal.wacc })); setEdited(p => { const n = new Set(p); n.delete('wacc'); return n }) }} explanation={aiExp.wacc} confidence={aiConf.wacc} isEdited={edited.has('wacc')} aiValue={aiOriginal?.wacc} />
                       <AsmInput label="Terminal Growth Rate" tipKey="terminalGrowth" value={asm.terminalGrowth} min={0} max={5} step={0.25} unit="%" onChange={v => set('terminalGrowth', v)} onReset={() => { setAsm(p => ({ ...p, terminalGrowth: aiOriginal.terminalGrowth })); setEdited(p => { const n = new Set(p); n.delete('terminalGrowth'); return n }) }} explanation={aiExp.terminal_growth} confidence={aiConf.terminal_growth} isEdited={edited.has('terminalGrowth')} aiValue={aiOriginal?.terminalGrowth} />
                     </div>
+                    {asm.wacc <= asm.terminalGrowth && (
+                      <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', fontSize: 12, color: '#fca5a5', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                        <span>⚠️</span>
+                        <span>Terminal Growth ({asm.terminalGrowth}%) must be less than WACC ({asm.wacc}%). The DCF model is undefined when growth ≥ discount rate. Reduce Terminal Growth or increase WACC.</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

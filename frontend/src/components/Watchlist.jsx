@@ -69,11 +69,17 @@ function WatchlistRow({ symbol, onRemove, onSelect }) {
 export default function Watchlist({ onSelectStock }) {
   const { list, add, remove } = useWatchlist()
   const [input, setInput] = useState('')
+  const [addError, setAddError] = useState(null)
 
   function handleAdd(e) {
     e.preventDefault()
+    setAddError(null)
     const sym = input.trim().toUpperCase()
-    if (sym) { add(sym); setInput('') }
+    if (!sym) return
+    if (!/^[A-Z]{1,5}$/.test(sym)) return setAddError(`"${sym}" doesn't look like a valid ticker.`)
+    if (list.includes(sym)) return setAddError(`${sym} is already in your watchlist.`)
+    add(sym)
+    setInput('')
   }
 
   return (
@@ -82,25 +88,30 @@ export default function Watchlist({ onSelectStock }) {
         ⭐ Watchlist
       </h2>
 
-      <form onSubmit={handleAdd} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Add symbol (e.g. AAPL)"
-          style={{
-            flex: 1, padding: '12px 16px', borderRadius: '10px',
-            border: '1px solid var(--border)', background: 'var(--bg-card)',
-            color: 'var(--text-primary)', fontSize: '14px', outline: 'none',
-          }}
-          onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-          onBlur={e => e.target.style.borderColor = 'var(--border)'}
-        />
-        <button type="submit" style={{
-          padding: '12px 20px', borderRadius: '10px', border: 'none',
-          background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer',
-        }}>
-          Add
-        </button>
+      <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <input
+            value={input}
+            onChange={e => { setInput(e.target.value); setAddError(null) }}
+            placeholder="Add symbol (e.g. AAPL)"
+            style={{
+              flex: 1, padding: '12px 16px', borderRadius: '10px',
+              border: `1px solid ${addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}`, background: 'var(--bg-card)',
+              color: 'var(--text-primary)', fontSize: '14px', outline: 'none',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+            onBlur={e => e.target.style.borderColor = addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}
+          />
+          <button type="submit" style={{
+            padding: '12px 20px', borderRadius: '10px', border: 'none',
+            background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer',
+          }}>
+            Add
+          </button>
+        </div>
+        {addError && (
+          <p style={{ fontSize: 12, color: '#fca5a5', paddingLeft: 4 }}>{addError}</p>
+        )}
       </form>
 
       {list.length === 0 ? (

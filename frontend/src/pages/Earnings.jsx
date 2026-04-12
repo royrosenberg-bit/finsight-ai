@@ -20,17 +20,19 @@ function DaysBadge({ days }) {
 export default function Earnings({ onSelectStock }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const watchlist = getWatchlist()
     const symbols = watchlist.length > 0 ? watchlist.join(',') : ''
     axios.get(`${API}/earnings${symbols ? `?symbols=${symbols}` : ''}`)
       .then(r => { setData(r.data); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(() => { setError('Could not load earnings data. Try again later.'); setLoading(false) })
   }, [])
 
-  const upcoming = data.filter(d => d.days_until >= 0)
-  const past = data.filter(d => d.days_until < 0)
+  // Sort upcoming ascending (soonest first), past descending (most recent first)
+  const upcoming = data.filter(d => d.days_until >= 0).sort((a, b) => a.days_until - b.days_until)
+  const past = data.filter(d => d.days_until < 0).sort((a, b) => b.days_until - a.days_until)
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -38,6 +40,10 @@ export default function Earnings({ onSelectStock }) {
 
       {loading ? (
         <div className="card"><TableSkeleton rows={8} /></div>
+      ) : error ? (
+        <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '20px', color: '#fca5a5', fontSize: 14 }}>
+          {error}
+        </div>
       ) : (
         <>
           {/* Upcoming */}

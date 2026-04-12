@@ -58,6 +58,7 @@ export default function CompareStocks() {
   const [chartData, setChartData] = useState([])
   const [period, setPeriod] = useState('3M')
   const [loading, setLoading] = useState(false)
+  const [addError, setAddError] = useState(null)
   const [stockInfo, setStockInfo] = useState({})
   const [fundamentals, setFundamentals] = useState(null)
   const [fundLoading, setFundLoading] = useState(false)
@@ -73,7 +74,9 @@ export default function CompareStocks() {
       const merged = {}
       results.forEach((res, i) => {
         const hist = res.data.history || []
-        const base = hist[0]?.close || 1
+        // Use first valid (non-zero) close as the base for normalization
+        const firstValid = hist.find(p => p.close && p.close > 0)
+        const base = firstValid?.close || 1
         hist.forEach(point => {
           if (!merged[point.date]) merged[point.date] = { date: point.date }
           merged[point.date][syms[i]] = parseFloat(((point.close - base) / base * 100).toFixed(2))
@@ -102,8 +105,12 @@ export default function CompareStocks() {
 
   async function addSymbol(e) {
     e.preventDefault()
+    setAddError(null)
     const sym = input.trim().toUpperCase()
-    if (!sym || symbols.includes(sym) || symbols.length >= 4) return
+    if (!sym) return
+    if (symbols.includes(sym)) return setAddError(`${sym} is already in the comparison.`)
+    if (symbols.length >= 4) return setAddError('Maximum 4 stocks can be compared at once.')
+    if (!/^[A-Z]{1,5}$/.test(sym)) return setAddError(`"${sym}" doesn't look like a valid ticker.`)
     try {
       const res = await axios.get(`${API}/stock/${sym}`)
       const newSymbols = [...symbols, sym]
@@ -113,7 +120,7 @@ export default function CompareStocks() {
       fetchChartData(newSymbols, period)
       if (newSymbols.length >= 2) fetchFundamentals(newSymbols)
     } catch {
-      alert(`Symbol "${sym}" not found`)
+      setAddError(`Symbol "${sym}" not found. Check the ticker and try again.`)
     }
   }
 
@@ -140,26 +147,31 @@ export default function CompareStocks() {
       </h2>
 
       {/* Add symbol */}
-      <form onSubmit={addSymbol} style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder={symbols.length >= 4 ? 'Max 4 stocks' : 'Add symbol (e.g. MSFT)'}
-          disabled={symbols.length >= 4}
-          style={{
-            flex: 1, padding: '12px 16px', borderRadius: 10,
-            border: '1px solid var(--border)', background: 'var(--bg-card)',
-            color: 'var(--text-primary)', fontSize: 14, outline: 'none',
-          }}
-          onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-          onBlur={e => e.target.style.borderColor = 'var(--border)'}
-        />
-        <button type="submit" disabled={symbols.length >= 4} style={{
-          padding: '12px 20px', borderRadius: 10, border: 'none',
-          background: symbols.length >= 4 ? 'var(--bg-card-hover)' : 'var(--accent)',
-          color: symbols.length >= 4 ? 'var(--text-muted)' : 'white',
-          fontWeight: 600, cursor: symbols.length >= 4 ? 'not-allowed' : 'pointer',
-        }}>Add</button>
+      <form onSubmit={addSymbol} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            value={input}
+            onChange={e => { setInput(e.target.value); setAddError(null) }}
+            placeholder={symbols.length >= 4 ? 'Max 4 stocks reached' : 'Add symbol (e.g. MSFT)'}
+            disabled={symbols.length >= 4}
+            style={{
+              flex: 1, padding: '12px 16px', borderRadius: 10,
+              border: `1px solid ${addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}`, background: 'var(--bg-card)',
+              color: 'var(--text-primary)', fontSize: 14, outline: 'none',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+            onBlur={e => e.target.style.borderColor = addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}
+          />
+          <button type="submit" disabled={symbols.length >= 4} style={{
+            padding: '12px 20px', borderRadius: 10, border: 'none',
+            background: symbols.length >= 4 ? 'var(--bg-card-hover)' : 'var(--accent)',
+            color: symbols.length >= 4 ? 'var(--text-muted)' : 'white',
+            fontWeight: 600, cursor: symbols.length >= 4 ? 'not-allowed' : 'pointer',
+          }}>Add</button>
+        </div>
+        {addError && (
+          <p style={{ fontSize: 12, color: '#fca5a5', paddingLeft: 4 }}>{addError}</p>
+        )}
       </form>
 
       {/* Stock chips */}

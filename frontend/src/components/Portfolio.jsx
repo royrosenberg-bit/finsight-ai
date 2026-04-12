@@ -91,20 +91,28 @@ export default function Portfolio({ onSelectStock }) {
     setAnalyzing(true)
     setAnalyzeError(null)
     try {
+      // Fetch any missing stock data, but don't fail the whole analysis if one stock errors
       const enriched = await Promise.all(holdings.map(async h => {
         let meta = stockMeta[h.symbol]
-        if (!meta) {
-          const res = await axios.get(`${API}/stock/${h.symbol}`)
-          meta = { name: res.data.name, sector: res.data.sector || '', change_pct: res.data.change_pct || 0 }
-          setPrices(p => ({ ...p, [h.symbol]: res.data.price }))
-          setStockMeta(m => ({ ...m, [h.symbol]: meta }))
+        let currentPrice = prices[h.symbol]
+        if (!meta || !currentPrice) {
+          try {
+            const res = await axios.get(`${API}/stock/${h.symbol}`)
+            meta = { name: res.data.name, sector: res.data.sector || '', change_pct: res.data.change_pct || 0 }
+            currentPrice = res.data.price
+            setPrices(p => ({ ...p, [h.symbol]: currentPrice }))
+            setStockMeta(m => ({ ...m, [h.symbol]: meta }))
+          } catch {
+            meta = meta || { name: h.symbol, sector: '', change_pct: 0 }
+            currentPrice = currentPrice || h.buyPrice
+          }
         }
         return {
           symbol: h.symbol,
           name: meta.name || h.symbol,
           shares: h.shares,
           buyPrice: h.buyPrice,
-          currentPrice: prices[h.symbol] || h.buyPrice,
+          currentPrice,
           sector: meta.sector || '',
           change_pct: meta.change_pct || 0,
         }
@@ -113,7 +121,7 @@ export default function Portfolio({ onSelectStock }) {
       setAnalysis(res.data)
       setTab('analysis')
     } catch (e) {
-      setAnalyzeError(e.response?.data?.detail || 'Analysis failed. Try again.')
+      setAnalyzeError(e.response?.data?.detail || 'Analysis failed. Please try again.')
     } finally {
       setAnalyzing(false)
     }
@@ -218,6 +226,12 @@ export default function Portfolio({ onSelectStock }) {
             background: 'none', color: 'var(--text-muted)', cursor: 'pointer',
           }}>Cancel</button>
         </form>
+      )}
+
+      {analyzeError && (
+        <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 12, padding: '14px 18px', marginBottom: 16, fontSize: 13, color: '#fca5a5', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span>⚠️</span> {analyzeError}
+        </div>
       )}
 
       {holdings.length === 0 ? (

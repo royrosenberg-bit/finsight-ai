@@ -98,7 +98,10 @@ function AllocationPie({ data, title, colors }) {
             {data.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
           </Pie>
           <Tooltip
-            formatter={(val) => [`$${val.toLocaleString('en-US', { maximumFractionDigits: 0 })} (${(val/total*100).toFixed(1)}%)`, '']}
+            formatter={(val) => {
+              const abs = Math.abs(Number(val))
+              return [`$${abs.toLocaleString('en-US', { maximumFractionDigits: 0 })} (${(abs/total*100).toFixed(1)}%)`, '']
+            }}
             contentStyle={{ background: '#1e2235', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
           />
         </PieChart>
@@ -124,9 +127,10 @@ function AllocationPie({ data, title, colors }) {
 // ── Main Component ─────────────────────────────────────────────────────────────
 export default function Portfolio({ onSelectStock }) {
   const { holdings, add, remove, loadDemo, clearAll } = usePortfolio()
-  const [prices,    setPrices]    = useState({})
-  const [stockMeta, setStockMeta] = useState({})
-  const [loadingPrices, setLoadingPrices] = useState(false)
+  const [prices,       setPrices]       = useState({})
+  const [stockMeta,    setStockMeta]    = useState({})
+  const [loadingPrices,setLoadingPrices]= useState(false)
+  const [failedSymbols,setFailedSymbols]= useState(new Set())
 
   const [form,     setForm]     = useState({ symbol: '', shares: '', buyPrice: '' })
   const [adding,   setAdding]   = useState(false)
@@ -140,7 +144,7 @@ export default function Portfolio({ onSelectStock }) {
 
   // ── Fetch prices for all holdings ─────────────────────────────────────────
   useEffect(() => {
-    const missing = holdings.filter(h => !prices[h.symbol])
+    const missing = holdings.filter(h => !prices[h.symbol] && !failedSymbols.has(h.symbol))
     if (missing.length === 0) return
     setLoadingPrices(true)
     Promise.allSettled(
@@ -148,19 +152,29 @@ export default function Portfolio({ onSelectStock }) {
         axios.get(`${API}/stock/${h.symbol}`).then(r => ({ symbol: h.symbol, data: r.data }))
       )
     ).then(results => {
+      const failed = new Set(failedSymbols)
       results.forEach(r => {
         if (r.status === 'fulfilled') {
           const { symbol, data } = r.value
-          setPrices(p => ({ ...p, [symbol]: data.price }))
-          setStockMeta(m => ({
-            ...m,
-            [symbol]: {
-              name: data.name, sector: data.sector || '',
-              change_pct: data.change_pct || 0, beta: data.beta || 1.0,
-            }
-          }))
+          if (data.price) {
+            setPrices(p => ({ ...p, [symbol]: data.price }))
+            setStockMeta(m => ({
+              ...m,
+              [symbol]: {
+                name: data.name, sector: data.sector || '',
+                change_pct: data.change_pct ?? 0, beta: data.beta || 1.0,
+              }
+            }))
+          } else {
+            failed.add(r.value.symbol)
+          }
+        } else {
+          // Extract symbol from the original request
+          const sym = missing[results.indexOf(r)]?.symbol
+          if (sym) failed.add(sym)
         }
       })
+      setFailedSymbols(failed)
       setLoadingPrices(false)
     })
   }, [holdings])
@@ -168,13 +182,18 @@ export default function Portfolio({ onSelectStock }) {
   // ── Derived metrics ────────────────────────────────────────────────────────
   const metrics = useMemo(() => {
     if (holdings.length === 0) return null
-    const enriched = holdings.map(h => {
-      const cur  = prices[h.symbol] || h.buyPrice
-      const val  = cur * h.shares
-      const cost = h.buyPrice * h.shares
+    // Only include holdings where we have a real current price (not a fallback)
+    const priced = holdings.filter(h => prices[h.symbol] > 0)
+    if (priced.length === 0) return null
+    const enriched = priced.map(h => {
+      const shares   = Number(h.shares)
+      const buyPrice = Number(h.buyPrice)
+      const cur  = Number(prices[h.symbol])
+      const val  = cur * shares
+      const cost = buyPrice * shares
       const pnl  = val - cost
-      const chg  = stockMeta[h.symbol]?.change_pct || 0
-      return { ...h, cur, val, cost, pnl, pnlPct: cost > 0 ? pnl/cost*100 : 0, dailyChg: val * chg/100, chgPct: chg }
+      const chg  = Number(stockMeta[h.symbol]?.change_pct ?? 0)
+      return { ...h, shares, buyPrice, cur, val, cost, pnl, pnlPct: cost > 0 ? pnl/cost*100 : 0, dailyChg: val * chg/100, chgPct: chg }
     })
     const totalVal  = enriched.reduce((s, h) => s + h.val, 0)
     const totalCost = enriched.reduce((s, h) => s + h.cost, 0)
@@ -372,8 +391,19 @@ export default function Portfolio({ onSelectStock }) {
         <AddForm form={form} setForm={setForm} error={addError} onSubmit={handleAdd} onCancel={() => { setAdding(false); setAddError(null) }} />
       )}
 
+      {/* Failed symbols warning */}
+      {failedSymbols.size > 0 && (
+        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '10px 16px', marginBottom: 12, fontSize: 13, color: '#fcd34d' }}>
+          ⚠️ Could not load price data for: <strong>{[...failedSymbols].join(', ')}</strong> — these are excluded from calculations.
+        </div>
+      )}
+
       {/* ── STATS ROW ── */}
-      {metrics && (
+      {loadingPrices && !metrics ? (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[1,2,3,4,5,6].map(i => <div key={i} className="skeleton" style={{ flex: 1, minWidth: 130, height: 72, borderRadius: 14 }} />)}
+        </div>
+      ) : metrics && (
         <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <StatCard label="Total Value" value={fmtUSD(metrics.totalVal)} />
           <StatCard

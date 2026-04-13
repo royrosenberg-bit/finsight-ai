@@ -42,33 +42,41 @@ def dcf_prefill(symbol: str):
 
 @router.get("/stock/{symbol}")
 def get_stock(symbol: str):
-    ticker = yf.Ticker(symbol.upper())
-    info = ticker.info
+    try:
+        ticker = yf.Ticker(symbol.upper())
+        info = ticker.info or {}
 
-    if not info or info.get("regularMarketPrice") is None and info.get("currentPrice") is None:
-        raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
+        price = info.get("currentPrice") or info.get("regularMarketPrice")
+        if not price:
+            raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
-    prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
-    change_pct = ((price - prev_close) / prev_close * 100) if prev_close else None
+        prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
+        change_pct = round((price - prev_close) / prev_close * 100, 2) if prev_close and price else None
 
-    # 1-year daily history for chart
-    hist = ticker.history(period="1y")
-    history = [
-        {"date": str(date.date()), "close": round(row["Close"], 2)}
-        for date, row in hist.iterrows()
-    ]
+        # 1-year daily history for chart
+        try:
+            hist = ticker.history(period="1y")
+            history = [
+                {"date": str(date.date()), "close": round(row["Close"], 2)}
+                for date, row in hist.iterrows()
+            ]
+        except Exception:
+            history = []
 
-    return {
-        "symbol": symbol.upper(),
-        "name": info.get("longName") or info.get("shortName", symbol.upper()),
-        "price": round(price, 2),
-        "change_pct": round(change_pct, 2) if change_pct is not None else None,
-        "market_cap": info.get("marketCap"),
-        "pe_ratio": info.get("trailingPE"),
-        "week_52_high": info.get("fiftyTwoWeekHigh"),
-        "week_52_low": info.get("fiftyTwoWeekLow"),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-        "history": history,
-    }
+        return {
+            "symbol": symbol.upper(),
+            "name": info.get("longName") or info.get("shortName", symbol.upper()),
+            "price": round(price, 2),
+            "change_pct": change_pct,
+            "market_cap": info.get("marketCap"),
+            "pe_ratio": info.get("trailingPE"),
+            "week_52_high": info.get("fiftyTwoWeekHigh"),
+            "week_52_low": info.get("fiftyTwoWeekLow"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "history": history,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch {symbol}: {str(e)}")

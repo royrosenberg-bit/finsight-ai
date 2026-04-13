@@ -249,6 +249,7 @@ export default function DCF() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
   const [aiLoading,   setAiLoading]   = useState(false)
+  const [aiError,     setAiError]     = useState(null)
   const [asm,         setAsm]         = useState(DEFAULTS)
   const [aiExp,       setAiExp]       = useState({})
   const [aiConf,      setAiConf]      = useState({})
@@ -302,6 +303,7 @@ export default function DCF() {
   async function runAI(data) {
     if (!data) return
     setAiLoading(true)
+    setAiError(null)
     try {
       const res = await axios.post(`${API}/dcf/assumptions`, {
         symbol: data.symbol, name: data.name, sector: data.sector || '',
@@ -331,7 +333,7 @@ export default function DCF() {
       setAiConf(ai.confidence  || {})
       setAiSummary(ai.summary  || '')
     } catch (e) {
-      console.error('AI assumptions failed', e)
+      setAiError(e.response?.data?.detail || 'AI analysis failed. Click "Re-run AI" to try again.')
     } finally {
       setAiLoading(false)
     }
@@ -601,6 +603,20 @@ export default function DCF() {
               </button>
             )}
           </div>
+
+          {/* ── AI ERROR ── */}
+          {aiError && !aiLoading && (
+            <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 12, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <span>⚠️</span>
+                <span style={{ fontSize: 13, color: '#fca5a5' }}>{aiError}</span>
+              </div>
+              <button onClick={() => runAI(stockData)} style={{
+                padding: '7px 16px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                background: 'linear-gradient(135deg,#6366f1,#818cf8)', color: 'white', whiteSpace: 'nowrap',
+              }}>✨ Re-run AI</button>
+            </div>
+          )}
 
           {/* ── AI LOADING SKELETON ── */}
           {aiLoading && (

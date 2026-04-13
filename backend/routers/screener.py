@@ -5,10 +5,32 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 router = APIRouter()
 
 SCREENER_UNIVERSE = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "BRK-B",
-    "JPM", "V", "UNH", "XOM", "JNJ", "WMT", "MA", "PG", "HD", "CVX",
-    "MRK", "ABBV", "BAC", "KO", "PEP", "AVGO", "COST", "ADBE", "NFLX",
-    "AMD", "CRM", "ORCL", "INTC", "DIS", "NKE", "PYPL", "UBER", "SHOP",
+    # Mega-cap tech
+    "AAPL", "MSFT", "NVDA", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "AVGO",
+    # Large-cap tech / software
+    "AMD", "INTC", "QCOM", "TXN", "MU", "AMAT",
+    "ADBE", "CRM", "ORCL", "NOW", "SNOW", "PLTR", "PANW", "CRWD", "NET",
+    "TEAM", "ZM", "DDOG", "MDB",
+    # Finance
+    "BRK-B", "JPM", "BAC", "GS", "MS", "WFC", "C", "V", "MA", "AXP",
+    "BLK", "SCHW", "COF", "USB", "PNC", "TFC",
+    # Healthcare
+    "UNH", "JNJ", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN", "GILD",
+    "ISRG", "VRTX", "REGN", "MRNA",
+    # Consumer / retail
+    "WMT", "COST", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD", "YUM",
+    "PG", "KO", "PEP", "PM", "CL", "EL",
+    # Energy
+    "XOM", "CVX", "COP", "SLB", "OXY", "PSX", "VLO",
+    # Industrials / transport
+    "BA", "CAT", "GE", "MMM", "HON", "RTX", "LMT", "NOC", "DE",
+    "UPS", "FDX", "CSX",
+    # Media / comms
+    "DIS", "NFLX", "CMCSA", "T", "VZ", "CHTR",
+    # Growth / high-beta
+    "SHOP", "UBER", "LYFT", "RBLX", "COIN", "HOOD", "SOFI",
+    # Real estate / utilities
+    "AMT", "PLD", "EQIX", "NEE", "DUK",
 ]
 
 

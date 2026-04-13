@@ -187,7 +187,7 @@ def analyze_portfolio(req: PortfolioRequest):
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=500,
+            max_tokens=600,
             messages=[{"role": "user", "content": build_prompt(metrics)}],
         )
         text = msg.content[0].text.strip()
@@ -195,12 +195,9 @@ def analyze_portfolio(req: PortfolioRequest):
             text = text.split("```")[1]
             if text.startswith("json"): text = text[4:]
         ai = json.loads(text.strip())
-    except Exception:
-        ai = {
-            "summary": "Portfolio analysis unavailable.",
-            "insights": [],
-            "risk_level": "Medium",
-            "rebalance_suggestions": [],
-        }
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI returned malformed JSON: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
 
     return {**metrics, **ai}

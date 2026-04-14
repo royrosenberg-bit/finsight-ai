@@ -9,6 +9,7 @@ import yfinance as yf
 from fastapi import APIRouter
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import cache
 
 router = APIRouter()
 
@@ -116,6 +117,10 @@ def _fallback_from_universe() -> tuple[list, list, str]:
 
 @router.get("/movers")
 def get_movers():
+    cached = cache.get("movers")
+    if cached:
+        return cached
+
     gainers, losers, source = _try_yahoo_screeners()
 
     if not gainers and not losers:
@@ -123,9 +128,11 @@ def get_movers():
 
     timestamp = datetime.now(timezone.utc).strftime("%-I:%M %p UTC")
 
-    return {
+    result = {
         "gainers": gainers,
         "losers": losers,
         "source": source,
         "timestamp": timestamp,
     }
+    cache.set("movers", result, ttl=300)  # cache movers for 5 minutes
+    return result

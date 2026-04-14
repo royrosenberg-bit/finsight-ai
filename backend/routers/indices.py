@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import yfinance as yf
+import cache
 
 router = APIRouter()
 
@@ -12,6 +13,9 @@ INDICES = {
 
 @router.get("/indices")
 def get_indices():
+    cached = cache.get("indices")
+    if cached:
+        return cached
     result = []
     for name, symbol in INDICES.items():
         try:
@@ -28,4 +32,5 @@ def get_indices():
             })
         except Exception:
             result.append({"name": name, "symbol": symbol, "price": None, "change_pct": None})
+    cache.set("indices", result, ttl=60)
     return result

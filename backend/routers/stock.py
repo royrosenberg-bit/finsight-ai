@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import cache
 
 router = APIRouter()
 
@@ -42,8 +43,12 @@ def dcf_prefill(symbol: str):
 
 @router.get("/stock/{symbol}")
 def get_stock(symbol: str):
+    sym = symbol.upper()
+    cached = cache.get(f"stock:{sym}")
+    if cached:
+        return cached
     try:
-        ticker = yf.Ticker(symbol.upper())
+        ticker = yf.Ticker(sym)
         info = ticker.info or {}
 
         price = info.get("currentPrice") or info.get("regularMarketPrice")
@@ -63,9 +68,9 @@ def get_stock(symbol: str):
         except Exception:
             history = []
 
-        return {
-            "symbol": symbol.upper(),
-            "name": info.get("longName") or info.get("shortName", symbol.upper()),
+        result = {
+            "symbol": sym,
+            "name": info.get("longName") or info.get("shortName", sym),
             "price": round(price, 2),
             "change_pct": change_pct,
             "market_cap": info.get("marketCap"),
@@ -76,7 +81,9 @@ def get_stock(symbol: str):
             "industry": info.get("industry"),
             "history": history,
         }
+        cache.set(f"stock:{sym}", result, ttl=60)
+        return result
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch {symbol}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch {sym}: {str(e)}")

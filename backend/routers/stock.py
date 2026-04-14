@@ -1,8 +1,26 @@
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
 import cache
+import time
 
 router = APIRouter()
+
+
+def _fetch_info(sym: str, retries: int = 3) -> dict:
+    """Fetch yfinance info with exponential backoff on rate limits."""
+    for attempt in range(retries):
+        try:
+            info = yf.Ticker(sym).info or {}
+            if info:
+                return info
+        except Exception as e:
+            msg = str(e).lower()
+            if "too many requests" in msg or "429" in msg or "rate" in msg:
+                if attempt < retries - 1:
+                    time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                    continue
+            raise
+    return {}
 
 
 @router.get("/dcf/prefill/{symbol}")
@@ -48,8 +66,7 @@ def get_stock(symbol: str):
     if cached:
         return cached
     try:
-        ticker = yf.Ticker(sym)
-        info = ticker.info or {}
+        info = _fetch_info(sym)
 
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         if not price:
@@ -60,7 +77,7 @@ def get_stock(symbol: str):
 
         # 1-year daily history for chart
         try:
-            hist = ticker.history(period="1y")
+            hist = yf.Ticker(sym).history(period="1y")
             history = [
                 {"date": str(date.date()), "close": round(row["Close"], 2)}
                 for date, row in hist.iterrows()

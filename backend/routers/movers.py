@@ -13,27 +13,12 @@ import cache
 
 router = APIRouter()
 
-# Fallback universe — ~60 stocks, diverse across sectors and market caps
+# Fallback universe — kept small (20 stocks) to avoid rate limiting Yahoo Finance
 FALLBACK_UNIVERSE = [
-    # Mega-cap tech
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
-    # Large-cap tech / software
-    "AMD", "INTC", "QCOM", "ADBE", "CRM", "ORCL", "NOW", "SNOW",
-    "PLTR", "PANW", "CRWD", "NET",
-    # Finance
-    "JPM", "BAC", "GS", "MS", "WFC", "V", "MA", "AXP", "BLK", "SCHW",
-    # Healthcare
-    "UNH", "JNJ", "PFE", "ABBV", "MRK", "LLY", "AMGN", "GILD", "VRTX",
-    # Consumer
-    "WMT", "COST", "HD", "NKE", "SBUX", "MCD", "PG", "KO", "PEP",
-    # Energy
-    "XOM", "CVX", "COP", "OXY",
-    # Industrials / transport
-    "BA", "CAT", "GE", "UPS", "FDX", "DE",
-    # Growth / high-beta
-    "NFLX", "SHOP", "UBER", "RBLX", "COIN",
-    # ETFs (for reference)
-    "SPY", "QQQ", "IWM",
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN",
+    "META", "TSLA", "JPM", "V", "UNH",
+    "XOM", "JNJ", "WMT", "AVGO", "AMD",
+    "NFLX", "BAC", "MA", "LLY", "COST",
 ]
 
 

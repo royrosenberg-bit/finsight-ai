@@ -6,7 +6,7 @@ import { CardSkeleton } from '../components/Skeleton'
 const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
 // Section B: curated large-cap watch list
-const LARGE_CAP = ['AAPL', 'MSFT', 'NVDA', 'META', 'TSLA', 'AMZN', 'GOOGL', 'JPM', 'AMD', 'BRK-B', 'UNH', 'LLY']
+const LARGE_CAP = ['AAPL', 'MSFT', 'NVDA', 'META', 'TSLA', 'AMZN', 'GOOGL', 'JPM']
 
 function formatPct(val) {
   if (val == null) return '—'

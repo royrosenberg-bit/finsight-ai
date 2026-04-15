@@ -98,7 +98,7 @@ def get_stock(symbol: str):
             "industry": info.get("industry"),
             "history": history,
         }
-        cache.set(f"stock:{sym}", result, ttl=60)
+        cache.set(f"stock:{sym}", result, ttl=300)
         return result
     except HTTPException:
         raise

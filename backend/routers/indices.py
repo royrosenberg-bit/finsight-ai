@@ -32,5 +32,5 @@ def get_indices():
             })
         except Exception:
             result.append({"name": name, "symbol": symbol, "price": None, "change_pct": None})
-    cache.set("indices", result, ttl=60)
+    cache.set("indices", result, ttl=300)
     return result

@@ -6,7 +6,18 @@
       "Bash(curl -s http://localhost:5173)",
       "Bash(xargs kill:*)",
       "Bash(kill -9 95121 95123)",
-      "Bash(xargs sed:*)"
+      "Bash(xargs sed:*)",
+      "Bash(pip3 show:*)",
+      "Bash(curl -s \"https://finsight-ai-backend-imxn.onrender.com/api/search?q=AAPL\")",
+      "Bash(curl -s \"https://finsight-ai-backend-imxn.onrender.com/api/stock/AAPL\")",
+      "Bash(python3 -c \"import yfinance as yf; t = yf.Ticker\\('AAPL'\\); print\\(t.info.get\\('currentPrice'\\)\\)\")",
+      "Bash(curl:*)",
+      "Bash(wc -l /Users/royrosenberg/Desktop/ClaudeCodeTest/frontend/src/components/*.jsx)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(npm run:*)"
     ]
   }
 }

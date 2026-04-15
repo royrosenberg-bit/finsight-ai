@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import axios from 'axios'
+import TickerAutocomplete from './TickerAutocomplete'
 
 const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444']
@@ -149,29 +150,22 @@ export default function CompareStocks() {
       {/* Add symbol */}
       <form onSubmit={addSymbol} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
         <div style={{ display: 'flex', gap: 10 }}>
-          <input
+          <TickerAutocomplete
             value={input}
-            onChange={e => { setInput(e.target.value); setAddError(null) }}
+            onChange={val => { setInput(val); setAddError(null) }}
+            onSelect={sym => { setInput(sym); setAddError(null) }}
             placeholder={symbols.length >= 4 ? 'Max 4 stocks reached' : 'Add symbol (e.g. MSFT)'}
             disabled={symbols.length >= 4}
-            style={{
-              flex: 1, padding: '12px 16px', borderRadius: 10,
-              border: `1px solid ${addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}`, background: 'var(--bg-card)',
-              color: 'var(--text-primary)', fontSize: 14, outline: 'none',
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-            onBlur={e => e.target.style.borderColor = addError ? 'rgba(239,68,68,0.5)' : 'var(--border)'}
+            error={!!addError}
           />
           <button type="submit" disabled={symbols.length >= 4} style={{
             padding: '12px 20px', borderRadius: 10, border: 'none',
             background: symbols.length >= 4 ? 'var(--bg-card-hover)' : 'var(--accent)',
             color: symbols.length >= 4 ? 'var(--text-muted)' : 'white',
-            fontWeight: 600, cursor: symbols.length >= 4 ? 'not-allowed' : 'pointer',
+            fontWeight: 600, cursor: symbols.length >= 4 ? 'not-allowed' : 'pointer', flexShrink: 0,
           }}>Add</button>
         </div>
-        {addError && (
-          <p style={{ fontSize: 12, color: '#fca5a5', paddingLeft: 4 }}>{addError}</p>
-        )}
+        {addError && <p style={{ fontSize: 12, color: '#fca5a5', paddingLeft: 4 }}>{addError}</p>}
       </form>
 
       {/* Stock chips */}

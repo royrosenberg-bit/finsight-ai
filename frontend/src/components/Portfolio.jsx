@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import axios from 'axios'
+import TickerAutocomplete from './TickerAutocomplete'
 
 const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const STORAGE_KEY = 'finsight_portfolio'
@@ -741,6 +742,7 @@ export default function Portfolio({ onSelectStock }) {
 
 // ── Add Form ──────────────────────────────────────────────────────────────────
 function AddForm({ form, setForm, error, onSubmit, onCancel }) {
+  const fieldStyle = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
   return (
     <form onSubmit={onSubmit} style={{
       background: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -752,23 +754,35 @@ function AddForm({ form, setForm, error, onSubmit, onCancel }) {
           {error}
         </div>
       )}
-      {[
-        { key: 'symbol',   label: 'Ticker',         placeholder: 'AAPL' },
-        { key: 'shares',   label: 'Shares',          placeholder: '10' },
-        { key: 'buyPrice', label: 'Avg Cost ($)',     placeholder: '150.00' },
-      ].map(({ key, label, placeholder }) => (
-        <div key={key} style={{ flex: 1, minWidth: 120 }}>
-          <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>{label}</label>
-          <input
-            value={form[key]}
-            onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-            placeholder={placeholder}
-            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-            onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
-          />
-        </div>
-      ))}
+
+      {/* Ticker — with autocomplete */}
+      <div style={{ flex: 1, minWidth: 140 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Ticker</label>
+        <TickerAutocomplete
+          value={form.symbol}
+          onChange={val => setForm(f => ({ ...f, symbol: val.toUpperCase() }))}
+          onSelect={sym => setForm(f => ({ ...f, symbol: sym }))}
+          placeholder="AAPL"
+          inputStyle={{ padding: '10px 12px', borderRadius: 8, fontSize: 14 }}
+        />
+      </div>
+
+      {/* Shares */}
+      <div style={{ flex: 1, minWidth: 100 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Shares</label>
+        <input value={form.shares} onChange={e => setForm(f => ({ ...f, shares: e.target.value }))} placeholder="10" style={fieldStyle}
+          onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+          onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+      </div>
+
+      {/* Avg Cost */}
+      <div style={{ flex: 1, minWidth: 120 }}>
+        <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Avg Cost ($)</label>
+        <input value={form.buyPrice} onChange={e => setForm(f => ({ ...f, buyPrice: e.target.value }))} placeholder="150.00" style={fieldStyle}
+          onFocus={e => e.target.style.borderColor = 'var(--accent)'}
+          onBlur={e => e.target.style.borderColor = 'var(--border)'} />
+      </div>
+
       <button type="submit" style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Add</button>
       <button type="button" onClick={onCancel} style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
     </form>

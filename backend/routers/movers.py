@@ -1,25 +1,33 @@
 """
 Market-wide movers endpoint.
 Primary: Yahoo Finance built-in screeners (day_gainers / day_losers) via yf.screen().
-Fallback: curated ~60-stock universe sorted by change_pct — used when market
-is closed or the screener API is unavailable.
+Fallback: batch yf.download() for 20 large-caps — single HTTP request, rate-limit safe.
 """
 
 import yfinance as yf
 from fastapi import APIRouter
 from datetime import datetime, timezone
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import cache
 
 router = APIRouter()
 
-# Fallback universe — kept small (20 stocks) to avoid rate limiting Yahoo Finance
+# Fallback universe — 20 large-caps with static names (no .info needed)
 FALLBACK_UNIVERSE = [
     "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN",
     "META", "TSLA", "JPM", "V", "UNH",
     "XOM", "JNJ", "WMT", "AVGO", "AMD",
     "NFLX", "BAC", "MA", "LLY", "COST",
 ]
+
+FALLBACK_NAMES = {
+    "AAPL": "Apple Inc.", "MSFT": "Microsoft Corp.", "NVDA": "NVIDIA Corp.",
+    "GOOGL": "Alphabet Inc.", "AMZN": "Amazon.com Inc.", "META": "Meta Platforms Inc.",
+    "TSLA": "Tesla Inc.", "JPM": "JPMorgan Chase & Co.", "V": "Visa Inc.",
+    "UNH": "UnitedHealth Group", "XOM": "Exxon Mobil Corp.", "JNJ": "Johnson & Johnson",
+    "WMT": "Walmart Inc.", "AVGO": "Broadcom Inc.", "AMD": "Advanced Micro Devices",
+    "NFLX": "Netflix Inc.", "BAC": "Bank of America Corp.", "MA": "Mastercard Inc.",
+    "LLY": "Eli Lilly and Co.", "COST": "Costco Wholesale Corp.",
+}
 
 
 def _parse_screener_quote(q: dict) -> dict | None:
@@ -30,7 +38,7 @@ def _parse_screener_quote(q: dict) -> dict | None:
     name = q.get("shortName") or q.get("longName") or q.get("symbol", "")
     return {
         "symbol": q.get("symbol", ""),
-        "name": name[:40],  # truncate long names
+        "name": name[:40],
         "price": round(price, 2),
         "change_pct": round(change_pct, 2),
     }
@@ -61,43 +69,52 @@ def _try_yahoo_screeners() -> tuple[list, list, str]:
     return [], [], ""
 
 
-def _fetch_one(symbol: str) -> dict | None:
-    try:
-        info = yf.Ticker(symbol).info
-        price = info.get("currentPrice") or info.get("regularMarketPrice")
-        prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
-        if not price or not prev:
-            return None
-        change_pct = (price - prev) / prev * 100
-        name = info.get("shortName") or info.get("longName") or symbol
-        return {
-            "symbol": symbol,
-            "name": name[:40],
-            "price": round(price, 2),
-            "change_pct": round(change_pct, 2),
-        }
-    except Exception:
-        return None
-
-
 def _fallback_from_universe() -> tuple[list, list, str]:
-    stocks = []
-    with ThreadPoolExecutor(max_workers=15) as ex:
-        futures = {ex.submit(_fetch_one, sym): sym for sym in FALLBACK_UNIVERSE}
-        for f in as_completed(futures):
-            result = f.result()
-            if result and result["change_pct"] is not None:
-                stocks.append(result)
+    """
+    Single yf.download() batch call — far less likely to trigger rate limits
+    than fetching .info for each ticker individually.
+    """
+    try:
+        import pandas as pd
+        tickers_str = " ".join(FALLBACK_UNIVERSE)
+        data = yf.download(tickers_str, period="2d", auto_adjust=True,
+                           progress=False, threads=False)
 
-    gainers = sorted(
-        [s for s in stocks if s["change_pct"] > 0],
-        key=lambda x: x["change_pct"], reverse=True
-    )[:8]
-    losers = sorted(
-        [s for s in stocks if s["change_pct"] < 0],
-        key=lambda x: x["change_pct"]
-    )[:8]
-    return gainers, losers, "curated universe (market may be closed)"
+        if data.empty or len(data) < 2:
+            return [], [], "curated universe (market may be closed)"
+
+        closes = data["Close"]
+        today_row = closes.iloc[-1]
+        prev_row = closes.iloc[-2]
+
+        stocks = []
+        for sym in FALLBACK_UNIVERSE:
+            try:
+                price = float(today_row[sym])
+                prev = float(prev_row[sym])
+                if pd.isna(price) or pd.isna(prev) or prev == 0:
+                    continue
+                change_pct = (price - prev) / prev * 100
+                stocks.append({
+                    "symbol": sym,
+                    "name": FALLBACK_NAMES.get(sym, sym),
+                    "price": round(price, 2),
+                    "change_pct": round(change_pct, 2),
+                })
+            except Exception:
+                continue
+
+        gainers = sorted(
+            [s for s in stocks if s["change_pct"] > 0],
+            key=lambda x: x["change_pct"], reverse=True
+        )[:8]
+        losers = sorted(
+            [s for s in stocks if s["change_pct"] < 0],
+            key=lambda x: x["change_pct"]
+        )[:8]
+        return gainers, losers, "curated universe (market may be closed)"
+    except Exception:
+        return [], [], "curated universe (market may be closed)"
 
 
 @router.get("/movers")
@@ -119,5 +136,5 @@ def get_movers():
         "source": source,
         "timestamp": timestamp,
     }
-    cache.set("movers", result, ttl=300)  # cache movers for 5 minutes
+    cache.set("movers", result, ttl=300)
     return result

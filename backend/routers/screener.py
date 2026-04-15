@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import cache
 
 router = APIRouter()
 
@@ -58,12 +59,18 @@ def fetch_stock(symbol):
 
 @router.get("/screener")
 def get_screener():
+    cached = cache.get("screener")
+    if cached:
+        return cached
+
     results = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(fetch_stock, sym): sym for sym in SCREENER_UNIVERSE}
         for future in as_completed(futures):
             data = future.result()
             if data and data["price"]:
                 results.append(data)
+
     results.sort(key=lambda x: x["symbol"])
+    cache.set("screener", results, ttl=900)  # cache for 15 minutes
     return results

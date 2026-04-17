@@ -16,6 +16,33 @@ load_dotenv()
 router = APIRouter()
 
 
+def _extract_json(text: str) -> dict:
+    """Robustly extract JSON from Claude's response, handling markdown wrappers and extra text."""
+    import re
+    text = text.strip()
+    # 1. Try direct parse
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    # 2. Extract from ```json ... ``` block
+    m = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except Exception:
+            pass
+    # 3. Find first { to last } in the text
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            pass
+    raise ValueError("Could not extract valid JSON from AI response")
+
+
 def _safe(df, row_candidates, col):
     """Safely extract a float value from a DataFrame, trying multiple row names."""
     if df is None or df.empty or col is None:
@@ -250,16 +277,12 @@ All percentages as plain numbers (e.g. 15 not 0.15). Be specific — mention {re
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=800,
+            max_tokens=1500,
             messages=[{"role": "user", "content": prompt}],
         )
         text = msg.content[0].text.strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        return json.loads(text.strip())
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="AI returned invalid JSON")
+        return _extract_json(text)
+    except (json.JSONDecodeError, ValueError) as e:
+        raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")

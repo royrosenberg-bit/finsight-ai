@@ -14,6 +14,29 @@ from dotenv import load_dotenv
 import cache
 
 load_dotenv()
+
+def _extract_json(text: str) -> dict:
+    """Robustly extract JSON from Claude response, handling markdown and extra text."""
+    import re as _re
+    text = text.strip()
+    try:
+        return __import__('json').loads(text)
+    except Exception:
+        pass
+    m = _re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+    if m:
+        try:
+            return __import__('json').loads(m.group(1))
+        except Exception:
+            pass
+    start, end = text.find('{'), text.rfind('}')
+    if start != -1 and end > start:
+        try:
+            return __import__('json').loads(text[start:end + 1])
+        except Exception:
+            pass
+    raise ValueError("Could not extract valid JSON from AI response")
+
 router = APIRouter()
 
 

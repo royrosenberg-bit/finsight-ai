@@ -12,6 +12,29 @@ import anthropic
 from dotenv import load_dotenv
 
 load_dotenv()
+
+def _extract_json(text: str) -> dict:
+    """Robustly extract JSON from Claude response, handling markdown and extra text."""
+    import re as _re
+    text = text.strip()
+    try:
+        return __import__('json').loads(text)
+    except Exception:
+        pass
+    m = _re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+    if m:
+        try:
+            return __import__('json').loads(m.group(1))
+        except Exception:
+            pass
+    start, end = text.find('{'), text.rfind('}')
+    if start != -1 and end > start:
+        try:
+            return __import__('json').loads(text[start:end + 1])
+        except Exception:
+            pass
+    raise ValueError("Could not extract valid JSON from AI response")
+
 router = APIRouter()
 
 
@@ -153,15 +176,11 @@ Be direct and specific. Cite actual numbers from the data. No disclaimers in the
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=900,
             messages=[{"role": "user", "content": prompt}],
         )
         text = msg.content[0].text.strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        result = json.loads(text.strip())
+        result = _extract_json(text)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"AI returned malformed JSON: {str(e)}")
     except Exception as e:

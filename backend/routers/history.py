@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ def get_history(symbol: str, period: str = "3m"):
     if not config:
         raise HTTPException(status_code=400, detail=f"Invalid period '{period}'. Use: {', '.join(PERIOD_CONFIG.keys())}")
 
-    ticker = yf.Ticker(symbol.upper())
+    ticker = yf_session.Ticker(symbol.upper())
     hist = ticker.history(period=config["period"], interval=config["interval"])
 
     if hist.empty:

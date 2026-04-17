@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 import anthropic
 from dotenv import load_dotenv
 import cache
@@ -17,7 +18,7 @@ router = APIRouter()
 
 
 def get_debate_context(symbol: str) -> dict:
-    ticker = yf.Ticker(symbol.upper())
+    ticker = yf_session.Ticker(symbol.upper())
     info = ticker.info
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")

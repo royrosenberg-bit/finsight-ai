@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 import anthropic
 from dotenv import load_dotenv
 
@@ -36,7 +37,7 @@ def detect_drivers(headlines: list[str]) -> list[str]:
 
 
 def get_stock_context(symbol: str) -> dict:
-    ticker = yf.Ticker(symbol.upper())
+    ticker = yf_session.Ticker(symbol.upper())
     info = ticker.info
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")

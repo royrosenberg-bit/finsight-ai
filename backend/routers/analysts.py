@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 
 router = APIRouter()
 
 
 @router.get("/analysts/{symbol}")
 def get_analysts(symbol: str):
-    ticker = yf.Ticker(symbol.upper())
+    ticker = yf_session.Ticker(symbol.upper())
     info = ticker.info
 
     if not info:

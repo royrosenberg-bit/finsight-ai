@@ -7,6 +7,7 @@ import os
 import json
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 import anthropic
 from dotenv import load_dotenv
 
@@ -15,7 +16,7 @@ router = APIRouter()
 
 
 def fetch_fundamentals(symbol: str) -> dict:
-    info = yf.Ticker(symbol.upper()).info
+    info = yf_session.Ticker(symbol.upper()).info
     price = info.get("currentPrice") or info.get("regularMarketPrice")
     prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
     change_pct = ((price - prev) / prev * 100) if price and prev else None

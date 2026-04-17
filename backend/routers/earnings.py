@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import yfinance as yf
+import yf_session
 from datetime import datetime, timezone
 
 router = APIRouter()
@@ -9,7 +10,7 @@ POPULAR = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "NFLX
 
 def get_earnings_date(symbol):
     try:
-        ticker = yf.Ticker(symbol)
+        ticker = yf_session.Ticker(symbol)
         info = ticker.info
         name = info.get("longName") or info.get("shortName", symbol)
 

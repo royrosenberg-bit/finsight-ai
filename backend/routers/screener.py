@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import yfinance as yf
+import yf_session
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import cache
 
@@ -37,7 +38,7 @@ SCREENER_UNIVERSE = [
 
 def fetch_stock(symbol):
     try:
-        info = yf.Ticker(symbol).info
+        info = yf_session.Ticker(symbol).info
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
         change_pct = ((price - prev) / prev * 100) if price and prev else None
@@ -72,5 +73,5 @@ def get_screener():
                 results.append(data)
 
     results.sort(key=lambda x: x["symbol"])
-    cache.set("screener", results, ttl=900)  # cache for 15 minutes
+    cache.set("screener", results, ttl=3600)  # 1 hour
     return results

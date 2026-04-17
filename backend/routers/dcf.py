@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import yfinance as yf
+import yf_session
 import anthropic
 from dotenv import load_dotenv
 
@@ -42,7 +43,7 @@ def _col0(df):
 
 @router.get("/dcf/data/{symbol}")
 def get_dcf_data(symbol: str):
-    ticker = yf.Ticker(symbol.upper())
+    ticker = yf_session.Ticker(symbol.upper())
     info = ticker.info
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")

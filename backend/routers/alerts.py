@@ -5,6 +5,7 @@ intelligent alerts for watchlist/portfolio stocks.
 
 from fastapi import APIRouter
 import yfinance as yf
+import yf_session
 from datetime import datetime, timezone, timedelta
 
 router = APIRouter()
@@ -15,7 +16,7 @@ POPULAR_SYMBOLS = ["AAPL", "TSLA", "NVDA", "META", "MSFT", "AMZN", "GOOGL", "AMD
 def get_alerts_for_symbol(symbol: str) -> list[dict]:
     alerts = []
     try:
-        ticker = yf.Ticker(symbol.upper())
+        ticker = yf_session.Ticker(symbol.upper())
         info = ticker.info
 
         price = info.get("currentPrice") or info.get("regularMarketPrice")

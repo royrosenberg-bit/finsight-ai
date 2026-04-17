@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 import yfinance as yf
+import yf_session
 import cache
 
 router = APIRouter()
@@ -19,7 +20,7 @@ def get_indices():
     result = []
     for name, symbol in INDICES.items():
         try:
-            ticker = yf.Ticker(symbol)
+            ticker = yf_session.Ticker(symbol)
             info = ticker.info
             price = info.get("regularMarketPrice") or info.get("currentPrice")
             prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
@@ -32,5 +33,5 @@ def get_indices():
             })
         except Exception:
             result.append({"name": name, "symbol": symbol, "price": None, "change_pct": None})
-    cache.set("indices", result, ttl=300)
+    cache.set("indices", result, ttl=1800)  # 30 min
     return result

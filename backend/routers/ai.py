@@ -7,6 +7,7 @@ import os
 import json
 from fastapi import APIRouter, HTTPException
 import yfinance as yf
+import yf_session
 import anthropic
 from dotenv import load_dotenv
 
@@ -39,7 +40,7 @@ def get_recommendation(symbol: str):
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
 
     sym = symbol.upper()
-    ticker = yf.Ticker(sym)
+    ticker = yf_session.Ticker(sym)
     info = ticker.info or {}
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")

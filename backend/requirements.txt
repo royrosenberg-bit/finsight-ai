@@ -1,5 +1,6 @@
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
-yfinance
+yfinance==1.2.1
+curl_cffi
 anthropic==0.91.0
 python-dotenv==1.0.1

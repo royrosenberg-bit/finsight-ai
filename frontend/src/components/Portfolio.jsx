@@ -525,6 +525,9 @@ export default function Portfolio({ onSelectStock }) {
               </div>
             </div>
           </div>
+
+          {/* Benchmark comparison */}
+          <BenchmarkCard portfolioDailyPct={metrics.dailyPct} portfolioReturnPct={metrics.returnPct} />
         </div>
       )}
 
@@ -736,6 +739,92 @@ export default function Portfolio({ onSelectStock }) {
         </div>
       )}
 
+    </div>
+  )
+}
+
+// ── Benchmark Comparison ──────────────────────────────────────────────────────
+function BenchmarkCard({ portfolioDailyPct, portfolioReturnPct }) {
+  const [spy, setSpy] = useState(null)
+  const [spyReturn1y, setSpyReturn1y] = useState(null)
+
+  useEffect(() => {
+    axios.get(`${API}/stock/SPY`).then(r => {
+      setSpy(r.data)
+      const hist = r.data.history || []
+      if (hist.length >= 2) {
+        const first = hist[0].close
+        const last  = hist[hist.length - 1].close
+        if (first > 0) setSpyReturn1y(((last - first) / first) * 100)
+      }
+    }).catch(() => {})
+  }, [])
+
+  if (!spy) return null
+
+  const portDaily = portfolioDailyPct
+  const spyDaily  = spy.change_pct
+
+  const dailyDiff = (portDaily != null && spyDaily != null) ? portDaily - spyDaily : null
+  const retDiff   = (portfolioReturnPct != null && spyReturn1y != null) ? portfolioReturnPct - spyReturn1y : null
+
+  const comp = (val) => {
+    if (val == null) return { color: 'var(--text-muted)', label: '—' }
+    if (val > 0.5)  return { color: '#22c55e', label: `+${val.toFixed(2)}% vs market` }
+    if (val < -0.5) return { color: '#ef4444', label: `${val.toFixed(2)}% vs market` }
+    return { color: '#f59e0b', label: 'In line with market' }
+  }
+
+  return (
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20 }}>
+      <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>📈 Benchmark vs S&P 500 (SPY)</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+
+        {/* Today */}
+        <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Your portfolio</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: (portDaily ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+              {portDaily != null ? `${portDaily >= 0 ? '+' : ''}${portDaily.toFixed(2)}%` : '—'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>S&P 500 (SPY)</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: (spyDaily ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+              {spyDaily != null ? `${spyDaily >= 0 ? '+' : ''}${spyDaily.toFixed(2)}%` : '—'}
+            </span>
+          </div>
+          {dailyDiff != null && (
+            <p style={{ fontSize: 11, fontWeight: 600, color: comp(dailyDiff).color, borderTop: '1px solid var(--border)', paddingTop: 8, margin: 0 }}>
+              {comp(dailyDiff).label}
+            </p>
+          )}
+        </div>
+
+        {/* Total return vs 1-year SPY */}
+        <div style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Return</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Your portfolio</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: (portfolioReturnPct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+              {portfolioReturnPct != null ? `${portfolioReturnPct >= 0 ? '+' : ''}${portfolioReturnPct.toFixed(2)}%` : '—'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>S&P 500 (1yr)</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: (spyReturn1y ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+              {spyReturn1y != null ? `${spyReturn1y >= 0 ? '+' : ''}${spyReturn1y.toFixed(2)}%` : '—'}
+            </span>
+          </div>
+          {retDiff != null && (
+            <p style={{ fontSize: 11, fontWeight: 600, color: comp(retDiff).color, borderTop: '1px solid var(--border)', paddingTop: 8, margin: 0 }}>
+              {comp(retDiff).label}
+            </p>
+          )}
+          <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>SPY 1-year return vs your cost-basis return</p>
+        </div>
+      </div>
     </div>
   )
 }

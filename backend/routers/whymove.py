@@ -1,6 +1,6 @@
 """
 Why Did This Move? — AI-powered move explanation engine.
-Uses recent news + price data + Claude to explain today's stock movement.
+Uses recent news + price data + volume + earnings + Claude to explain today's stock movement.
 """
 
 import os
@@ -14,21 +14,19 @@ from dotenv import load_dotenv
 load_dotenv()
 router = APIRouter()
 
-# Keywords used to classify the type of driver
 KEYWORD_CATEGORIES = {
-    "earnings":      ["earnings", "eps", "revenue", "beat", "miss", "guidance", "profit", "loss", "quarter", "q1", "q2", "q3", "q4"],
-    "analyst":       ["upgrade", "downgrade", "price target", "buy rating", "sell rating", "analyst", "rating", "overweight", "underweight", "outperform"],
-    "ai_tech":       ["ai", "artificial intelligence", "machine learning", "chatgpt", "llm", "gpu", "chip", "semiconductor", "data center"],
-    "macro":         ["fed", "federal reserve", "interest rate", "inflation", "cpi", "recession", "gdp", "economy", "jobs", "unemployment", "treasury"],
-    "product":       ["launch", "product", "release", "iphone", "update", "new model", "partnership", "deal", "contract"],
-    "legal":         ["lawsuit", "regulation", "fine", "sec", "doj", "antitrust", "investigation", "settlement"],
-    "acquisition":   ["acquisition", "merger", "buyout", "acquire", "takeover", "deal", "bid"],
-    "sector":        ["sector", "industry", "market-wide", "tech stocks", "nasdaq", "s&p", "broader market"],
+    "earnings":    ["earnings", "eps", "revenue", "beat", "miss", "guidance", "profit", "loss", "quarter", "q1", "q2", "q3", "q4"],
+    "analyst":     ["upgrade", "downgrade", "price target", "buy rating", "sell rating", "analyst", "rating", "overweight", "underweight", "outperform"],
+    "ai_tech":     ["ai", "artificial intelligence", "machine learning", "chatgpt", "llm", "gpu", "chip", "semiconductor", "data center"],
+    "macro":       ["fed", "federal reserve", "interest rate", "inflation", "cpi", "recession", "gdp", "economy", "jobs", "unemployment", "treasury"],
+    "product":     ["launch", "product", "release", "iphone", "update", "new model", "partnership", "deal", "contract"],
+    "legal":       ["lawsuit", "regulation", "fine", "sec", "doj", "antitrust", "investigation", "settlement"],
+    "acquisition": ["acquisition", "merger", "buyout", "acquire", "takeover", "deal", "bid"],
+    "sector":      ["sector", "industry", "market-wide", "tech stocks", "nasdaq", "s&p", "broader market"],
 }
 
 
 def detect_drivers(headlines: list[str]) -> list[str]:
-    """Detect likely driver categories from headlines."""
     found = set()
     combined = " ".join(headlines).lower()
     for category, keywords in KEYWORD_CATEGORIES.items():
@@ -38,7 +36,6 @@ def detect_drivers(headlines: list[str]) -> list[str]:
 
 
 def get_stock_context(symbol: str) -> dict:
-    """Fetch price change and recent news for the symbol."""
     ticker = yf.Ticker(symbol.upper())
     info = ticker.info
 
@@ -47,6 +44,31 @@ def get_stock_context(symbol: str) -> dict:
     change_pct = ((price - prev_close) / prev_close * 100) if price and prev_close else None
     name = info.get("longName") or info.get("shortName", symbol.upper())
     sector = info.get("sector", "")
+
+    # Volume anomaly detection
+    volume = info.get("regularMarketVolume") or info.get("volume")
+    avg_volume = info.get("averageVolume") or info.get("averageDailyVolume10Day")
+    volume_ratio = round(volume / avg_volume, 2) if (volume and avg_volume and avg_volume > 0) else None
+
+    # Next earnings date
+    next_earnings = None
+    try:
+        cal = ticker.calendar
+        if isinstance(cal, dict):
+            ed = cal.get("Earnings Date")
+            if ed:
+                if isinstance(ed, list) and len(ed) > 0:
+                    next_earnings = str(ed[0])[:10]
+                else:
+                    next_earnings = str(ed)[:10]
+        elif hasattr(cal, "columns"):
+            # DataFrame format
+            if "Earnings Date" in cal.columns:
+                val = cal["Earnings Date"].iloc[0] if not cal.empty else None
+                if val is not None:
+                    next_earnings = str(val)[:10]
+    except Exception:
+        pass
 
     # Collect recent headlines
     raw_news = ticker.news or []
@@ -67,6 +89,8 @@ def get_stock_context(symbol: str) -> dict:
         "price": round(price, 2) if price else None,
         "change_pct": round(change_pct, 2) if change_pct is not None else None,
         "sector": sector,
+        "volume_ratio": volume_ratio,
+        "next_earnings": next_earnings,
         "headlines": headlines,
         "news_items": news_items[:5],
     }
@@ -77,30 +101,46 @@ def build_prompt(ctx: dict) -> str:
     change_str = f"{'+' if ctx['change_pct'] >= 0 else ''}{ctx['change_pct']}%" if ctx["change_pct"] is not None else "flat"
     headlines_str = "\n".join(f"- {h}" for h in ctx["headlines"]) if ctx["headlines"] else "- No recent headlines available"
 
-    return f"""You are a sharp financial analyst writing a brief, natural-sounding explanation for everyday investors — not for Wall Street professionals.
+    volume_str = ""
+    if ctx["volume_ratio"] is not None:
+        if ctx["volume_ratio"] >= 2.0:
+            volume_str = f"\nVolume: {ctx['volume_ratio']}x normal — VERY unusual volume today"
+        elif ctx["volume_ratio"] >= 1.5:
+            volume_str = f"\nVolume: {ctx['volume_ratio']}x normal — elevated volume"
+        else:
+            volume_str = f"\nVolume: {ctx['volume_ratio']}x normal"
+
+    earnings_str = f"\nNext Earnings: {ctx['next_earnings']}" if ctx["next_earnings"] else "\nNext Earnings: Unknown"
+
+    return f"""You are a sharp financial analyst writing for everyday investors.
 
 Stock: {ctx['name']} ({ctx['symbol']})
 Today's Move: {change_str} ({direction})
-Sector: {ctx['sector'] or 'N/A'}
+Sector: {ctx['sector'] or 'N/A'}{volume_str}{earnings_str}
 
 Recent Headlines:
 {headlines_str}
 
-Your job: explain why this stock moved today in 1-2 clear, confident sentences. Sound like a smart friend who follows markets — not a press release.
+Explain why this stock moved today. Also provide forward-looking guidance.
 
 Respond with ONLY raw JSON (no markdown, no code block):
 {{
-  "summary": "1-2 sentence explanation. Be specific if the headlines provide a clear reason. Avoid generic filler phrases like 'investors are reacting' — say what actually happened.",
-  "drivers": ["short specific driver", "short specific driver", "short specific driver"],
+  "summary": "1-2 sentence explanation. Be specific if headlines provide a clear reason. Sound like a smart friend who follows markets — not a press release.",
+  "drivers": ["specific driver under 8 words", "specific driver under 8 words", "specific driver under 8 words"],
+  "what_to_watch": {{
+    "key_risk": "The single biggest near-term risk in one sentence",
+    "next_catalyst": "The next event or data point that could move this stock",
+    "watch_note": "One actionable thing investors should monitor"
+  }},
   "confidence": "High" | "Medium" | "Low",
-  "confidence_reason": "One sentence. High = clear catalyst in news. Medium = partial signal. Low = no obvious catalyst."
+  "confidence_reason": "One sentence. High = clear catalyst. Medium = partial signal. Low = no obvious catalyst."
 }}
 
 Rules:
-- Each driver must be under 8 words and specific (e.g. "Earnings beat analyst estimates" not "Company news")
+- Each driver must be specific (e.g. "Earnings beat analyst estimates" not "Company news")
+- what_to_watch must be forward-looking and specific to this stock
 - If no clear reason exists: confidence = Low, summary = "No clear catalyst today. This move may reflect broader market sentiment or normal trading volatility."
-- Never start the summary with the ticker symbol or the company name
-- Write the summary as if explaining to a smart friend over text"""
+- Never start the summary with the ticker symbol or the company name"""
 
 
 @router.get("/whymove/{symbol}")
@@ -109,7 +149,6 @@ def why_did_this_move(symbol: str):
     if not api_key:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
 
-    # 1. Fetch stock context
     try:
         ctx = get_stock_context(symbol)
     except Exception as e:
@@ -118,30 +157,30 @@ def why_did_this_move(symbol: str):
     if ctx["price"] is None:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
 
-    # 2. Detect keyword drivers for context
     detected = detect_drivers(ctx["headlines"])
 
-    # 3. Call Claude
     try:
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=400,
+            max_tokens=600,
             messages=[{"role": "user", "content": build_prompt(ctx)}],
         )
         text = message.content[0].text.strip()
-
-        # Strip markdown if Claude wrapped it
         if "```" in text:
             text = text.split("```")[1]
             if text.startswith("json"):
                 text = text[4:]
-
         result = json.loads(text.strip())
     except json.JSONDecodeError:
         result = {
             "summary": "No single clear catalyst detected. The move may be related to broader market activity or normal volatility.",
             "drivers": ["Broader market movement", "Normal daily volatility", "No specific catalyst found"],
+            "what_to_watch": {
+                "key_risk": "No specific risk identified from available data",
+                "next_catalyst": "Earnings date or next major company announcement",
+                "watch_note": "Monitor for company-specific news or sector developments",
+            },
             "confidence": "Low",
             "confidence_reason": "Could not parse AI response.",
         }
@@ -153,8 +192,11 @@ def why_did_this_move(symbol: str):
         "name": ctx["name"],
         "price": ctx["price"],
         "change_pct": ctx["change_pct"],
+        "volume_ratio": ctx["volume_ratio"],
+        "next_earnings": ctx["next_earnings"],
         "summary": result.get("summary", ""),
         "drivers": result.get("drivers", []),
+        "what_to_watch": result.get("what_to_watch"),
         "confidence": result.get("confidence", "Low"),
         "confidence_reason": result.get("confidence_reason", ""),
         "detected_categories": detected,

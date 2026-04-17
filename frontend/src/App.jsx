@@ -12,6 +12,7 @@ import Portfolio from './components/Portfolio'
 import CompareStocks from './components/CompareStocks'
 import AnalystRatings from './components/AnalystRatings'
 import WhyDidThisMove from './components/WhyDidThisMove'
+import AIDebate from './components/AIDebate'
 import Dashboard from './pages/Dashboard'
 import Screener from './pages/Screener'
 import Earnings from './pages/Earnings'
@@ -129,6 +130,7 @@ export default function App() {
                     <AIRecommendation symbol={stockData.symbol} stockData={stockData} />
                     <NewsSection symbol={stockData.symbol} />
                   </div>
+                  <AIDebate symbol={stockData.symbol} />
                 </>
               )}
             </div>

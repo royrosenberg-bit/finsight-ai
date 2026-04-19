@@ -327,23 +327,30 @@ def ai_screener_search(req: AISearchRequest):
             detail="Screener data not loaded yet — visit /api/screener first, then retry.",
         )
 
-    # Compact one-line summary per stock (~55 chars each → ~12 k tokens for 220 stocks)
+    # Limit to top 200 stocks by market cap to stay within token limits.
+    # This still covers every major company the user is likely asking about.
+    ranked = sorted(
+        [s for s in stocks if s.get("market_cap")],
+        key=lambda s: s["market_cap"],
+        reverse=True,
+    )[:200]
+
+    # Ultra-compact format: ~35 chars per row → ~7,000 chars → ~1,750 tokens
     def _row(s: dict) -> str:
         pe  = s.get("forward_pe") or s.get("pe_ratio")
-        cap = f"{round(s['market_cap'] / 1e9)}B" if s.get("market_cap") else "N/A"
+        cap = s["market_cap"]
+        cap_str = f"{cap/1e12:.1f}T" if cap >= 1e12 else f"{cap/1e9:.0f}B"
         return (
-            f"{s['symbol']}|{s.get('sector','?')[:4]}"
-            f"|cap={cap}"
-            f"|pe={round(pe,1) if pe else 'N/A'}"
-            f"|gr={s.get('revenue_growth','N/A')}%"
-            f"|div={round(s.get('dividend_yield') or 0,1)}%"
-            f"|gm={s.get('gross_margin','N/A')}%"
-            f"|b={s.get('beta','N/A')}"
-            f"|52w={s.get('week_52_pos','N/A')}%"
-            f"|chg={s.get('change_pct','N/A')}%"
+            f"{s['symbol']} {s.get('sector','?')[:3]}"
+            f" {cap_str}"
+            f" pe{round(pe) if pe else '-'}"
+            f" g{round(s['revenue_growth']) if s.get('revenue_growth') is not None else '-'}%"
+            f" d{round(s.get('dividend_yield') or 0,1)}%"
+            f" m{round(s['gross_margin']) if s.get('gross_margin') is not None else '-'}%"
+            f" 52:{round(s['week_52_pos']) if s.get('week_52_pos') is not None else '-'}"
         )
 
-    universe_text = "\n".join(_row(s) for s in stocks)
+    universe_text = "\n".join(_row(s) for s in ranked)
 
     prompt = f"""You are a professional stock screener AI. The user described what they want in plain English.
 

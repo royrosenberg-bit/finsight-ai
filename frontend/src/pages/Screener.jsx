@@ -422,6 +422,9 @@ export default function Screener({ onSelectStock, onOpenDCF }) {
     setAiLoading(true)
     setAiError(null)
     setAiResults(null)
+    // Clear any active filters so AI results aren't accidentally blocked
+    setFilters(EMPTY_FILTERS)
+    setActivePreset('all')
     try {
       const { data } = await axios.post(`${API}/screener/ai-search`, { query: q })
       setAiResults(data)

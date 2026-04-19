@@ -442,16 +442,19 @@ export default function Screener({ onSelectStock, onOpenDCF }) {
   function applyAISuggestedFilters() {
     const sf = aiResults?.suggested_filters
     if (!sf) return
-    setFilters(f => ({
-      ...f,
-      sector:       sf.sector       ?? f.sector,
-      minRevGrowth: sf.minRevGrowth != null ? String(sf.minRevGrowth) : f.minRevGrowth,
-      maxPE:        sf.maxPE        != null ? String(sf.maxPE)        : f.maxPE,
-      minDivYield:  sf.minDivYield  != null ? String(sf.minDivYield)  : f.minDivYield,
-      minWeek52Pos: sf.minWeek52Pos != null ? String(sf.minWeek52Pos) : f.minWeek52Pos,
-      maxWeek52Pos: sf.maxWeek52Pos != null ? String(sf.maxWeek52Pos) : f.maxWeek52Pos,
-      minCap:       sf.minCap       != null ? String(sf.minCap)       : f.minCap,
-    }))
+    // Exit AI mode first, then apply filters to the full dataset
+    setAiResults(null)
+    setFilters({
+      ...EMPTY_FILTERS,
+      sector:       sf.sector       ?? 'All',
+      minRevGrowth: sf.minRevGrowth != null ? String(sf.minRevGrowth) : '',
+      maxPE:        sf.maxPE        != null ? String(sf.maxPE)        : '',
+      minDivYield:  sf.minDivYield  != null ? String(sf.minDivYield)  : '',
+      minWeek52Pos: sf.minWeek52Pos != null ? String(sf.minWeek52Pos) : '',
+      maxWeek52Pos: sf.maxWeek52Pos != null ? String(sf.maxWeek52Pos) : '',
+      minCap:       sf.minCap       != null ? String(sf.minCap)       : '',
+    })
+    setActivePreset('custom')
   }
 
   // Map symbol → AI reason for use in table rows
@@ -509,10 +512,18 @@ export default function Screener({ onSelectStock, onOpenDCF }) {
   const filtered = useMemo(() => {
     let data = [...stocks]
 
-    // AI search takes priority — filter to matched symbols only
+    // AI search takes priority — show only matched symbols, skip all other filters
     if (aiResults?.matches?.length) {
       const matchSet = new Set(aiResults.matches.map(m => m.symbol))
       data = data.filter(s => matchSet.has(s.symbol))
+      data.sort((a, b) => {
+        const av = a[sortBy] ?? (typeof b[sortBy] === 'number' ? -Infinity : '')
+        const bv = b[sortBy] ?? (typeof a[sortBy] === 'number' ? -Infinity : '')
+        if (av < bv) return sortDir === 'asc' ? -1 : 1
+        if (av > bv) return sortDir === 'asc' ? 1 : -1
+        return 0
+      })
+      return data
     }
 
     const q = filters.search.trim().toLowerCase()

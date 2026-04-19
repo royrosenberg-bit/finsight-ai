@@ -6,6 +6,7 @@ import os
 import json
 import re
 import time
+import urllib.request
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -18,91 +19,123 @@ load_dotenv()
 
 router = APIRouter()
 
-# ~220 liquid US-listed stocks organized by sector.
-# Deduplicated at module load — safe to add duplicates when expanding.
-SCREENER_UNIVERSE = [
-    # ── Mega-cap ──────────────────────────────────────────────────────
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO",
+# ── Stock universe ────────────────────────────────────────────────────────────
+# Primary: fetch current S&P 500 constituents from Wikipedia at startup.
+# Fallback: hardcoded ~450-stock list used if Wikipedia is unreachable.
 
-    # ── Semiconductors ───────────────────────────────────────────────
-    "AMD", "INTC", "QCOM", "TXN", "MU", "AMAT", "LRCX", "KLAC", "MRVL",
-    "ON", "MPWR", "ASML", "ARM", "SMCI",
-
-    # ── Software / SaaS / Cloud ───────────────────────────────────────
-    "ADBE", "CRM", "ORCL", "NOW", "SNOW", "PLTR", "PANW", "CRWD", "NET",
-    "TEAM", "DDOG", "MDB", "HUBS", "WDAY", "VEEV", "ZS", "OKTA", "GTLB",
-    "BILL", "TTD", "ZM",
-
-    # ── Internet / Consumer Tech ──────────────────────────────────────
-    "SHOP", "UBER", "LYFT", "ABNB", "DASH", "BKNG", "EXPE",
-    "PINS", "SNAP", "SPOT", "ETSY", "EBAY",
-
-    # ── Finance — Banking ─────────────────────────────────────────────
-    "BRK-B", "JPM", "BAC", "GS", "MS", "WFC", "C", "USB", "PNC", "TFC",
-    "COF", "DFS", "SYF", "ALLY", "KEY", "RF", "FITB", "HBAN", "CFG", "MTB",
-
-    # ── Finance — Payments ────────────────────────────────────────────
-    "V", "MA", "AXP", "PYPL", "SQ",
-
-    # ── Finance — Insurance / Asset Management ────────────────────────
-    "BLK", "SCHW", "MET", "PRU", "AFL", "ALL", "PGR", "CB", "AIG",
-    "MMC", "AON",
-
-    # ── Finance — Fintech / Crypto ────────────────────────────────────
-    "COIN", "HOOD", "SOFI", "NU", "AFRM",
-
-    # ── Healthcare — Pharma / Biotech ─────────────────────────────────
-    "UNH", "JNJ", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN", "GILD",
-    "VRTX", "REGN", "MRNA", "BIIB", "ISRG", "ILMN",
-
-    # ── Healthcare — Medical Devices ──────────────────────────────────
-    "ABT", "MDT", "BSX", "EW", "SYK", "ZBH", "HOLX", "DXCM",
-
-    # ── Healthcare — Services / Managed Care ──────────────────────────
-    "CVS", "CI", "HUM", "CNC", "HCA",
-
-    # ── Consumer Discretionary ────────────────────────────────────────
-    "WMT", "COST", "TGT", "HD", "LOW",
-    "NKE", "SBUX", "MCD", "YUM", "CMG", "DRI",
-    "F", "GM", "RIVN",
-    "MAR", "HLT", "LVS", "MGM", "WYNN",
-    "DKNG", "RBLX",
-
-    # ── Consumer Staples ──────────────────────────────────────────────
-    "PG", "KO", "PEP", "PM", "MO", "CL", "EL",
-    "GIS", "K", "KHC", "HSY", "MDLZ", "CPB",
-
-    # ── Energy — Oil & Gas ────────────────────────────────────────────
-    "XOM", "CVX", "COP", "SLB", "OXY", "PSX", "VLO", "MPC",
-    "HAL", "BKR", "DVN", "EOG", "FANG",
-
-    # ── Energy — Utilities ────────────────────────────────────────────
-    "NEE", "AES", "SO", "DUK", "D", "EXC", "XEL", "PCG",
-
-    # ── Materials ─────────────────────────────────────────────────────
-    "LIN", "APD", "NEM", "FCX", "AA", "NUE", "DOW", "DD", "LYB", "ALB", "MP",
-
-    # ── Industrials ───────────────────────────────────────────────────
-    "BA", "CAT", "GE", "MMM", "HON", "RTX", "LMT", "NOC", "DE",
-    "UPS", "FDX", "CSX", "NSC", "UNP",
-    "ETN", "EMR", "PH", "ITW", "ROK", "AME", "WM",
+_FALLBACK_UNIVERSE = [
+    # ── Information Technology ────────────────────────────────────────
+    "AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "CSCO", "ADBE", "AMD", "ACN",
+    "TXN", "QCOM", "INTC", "AMAT", "KLAC", "LRCX", "MU", "NOW", "PANW", "SNPS",
+    "CDNS", "FTNT", "APH", "IT", "KEYS", "ANSS", "NTAP", "GDDY", "VRSN", "CTSH",
+    "GLW", "HPQ", "HPE", "STX", "MPWR", "MCHP", "SWKS", "AKAM", "ZBRA", "CDW",
+    "WDC", "FFIV", "JNPR", "GEN", "ON", "MRVL", "SMCI", "FSLR", "ENPH", "TDY",
 
     # ── Communication Services ────────────────────────────────────────
-    "DIS", "NFLX", "CMCSA", "T", "VZ", "CHTR", "PARA", "WBD", "NYT",
+    "GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "CHTR",
+    "PARA", "WBD", "OMC", "IPG", "EA", "TTWO", "MTCH", "NWSA", "NWS",
+    "FOX", "FOXA", "LYV", "NYT",
+
+    # ── Consumer Discretionary ────────────────────────────────────────
+    "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "TJX", "BKNG",
+    "CMG", "YUM", "ORLY", "AZO", "ROST", "DHI", "LEN", "PHM", "NVR",
+    "ULTA", "RL", "HAS", "MAT", "MGM", "CZR", "WYNN", "LVS", "RCL",
+    "CCL", "NCLH", "MAR", "HLT", "EXPE", "ABNB", "DKNG", "F", "GM",
+    "APTV", "BWA", "LKQ", "KMX", "AN", "POOL", "LULU", "DRI", "EAT",
+    "QSR", "DPZ", "GRMN", "BOOT",
+
+    # ── Consumer Staples ──────────────────────────────────────────────
+    "WMT", "PG", "KO", "PEP", "COST", "PM", "MO", "CL", "MDLZ", "KHC",
+    "STZ", "GIS", "K", "HSY", "SJM", "CPB", "MKC", "HRL", "CHD", "CLX",
+    "EL", "TSN", "CAG", "KR", "SYY", "BG", "ADM",
+
+    # ── Healthcare ────────────────────────────────────────────────────
+    "UNH", "LLY", "JNJ", "ABBV", "MRK", "TMO", "ABT", "DHR", "BMY",
+    "AMGN", "ISRG", "SYK", "GILD", "MDT", "CI", "HCA", "BSX", "EW",
+    "VRTX", "REGN", "ZTS", "IQV", "CVS", "HUM", "CNC", "MCK", "CAH",
+    "ABC", "BIIB", "ILMN", "DXCM", "HOLX", "RMD", "BDX", "ZBH",
+    "IDXX", "WAT", "A", "MRNA", "GEHC", "PODD", "ALGN", "MTD", "CRL",
+    "BAX", "HSIC", "MOH", "ELV", "PFE", "VTRS",
+
+    # ── Financials ────────────────────────────────────────────────────
+    "BRK-B", "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW",
+    "AXP", "V", "MA", "COF", "DFS", "SYF", "ALLY", "USB", "PNC",
+    "TFC", "MTB", "CFG", "FITB", "HBAN", "KEY", "RF", "STT", "BK",
+    "NTRS", "TRV", "AIG", "MET", "PRU", "AFL", "ALL", "PGR", "CB",
+    "MMC", "AON", "AJG", "WTW", "HIG", "CINF", "ICE", "CME", "NDAQ",
+    "CBOE", "SPGI", "MCO", "FDS", "MSCI", "RJF", "TROW", "IVZ", "BEN",
+    "ACGL", "RE", "WRB", "MKL", "COIN", "PYPL", "SQ", "SOFI",
+
+    # ── Energy ────────────────────────────────────────────────────────
+    "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "VLO", "OXY",
+    "DVN", "HAL", "BKR", "FANG", "HES", "APA", "MRO", "EQT", "CTRA",
+    "OKE", "WMB", "KMI", "TRGP", "LNG",
+
+    # ── Utilities ─────────────────────────────────────────────────────
+    "NEE", "DUK", "SO", "D", "AES", "EXC", "XEL", "PCG", "ED", "ETR",
+    "FE", "ES", "WEC", "PPL", "DTE", "LNT", "AEE", "EVRG", "NI",
+    "PNW", "ATO", "NRG", "CEG", "SRE", "AWK",
 
     # ── Real Estate ───────────────────────────────────────────────────
-    "AMT", "PLD", "EQIX", "CCI", "SPG", "O", "DLR", "WELL",
-    "PSA", "EXR", "AVB", "EQR",
+    "AMT", "PLD", "EQIX", "CCI", "SPG", "O", "DLR", "WELL", "PSA",
+    "EXR", "AVB", "EQR", "UDR", "CPT", "ESS", "MAA", "NNN", "VICI",
+    "WPC", "BXP", "VNO", "KIM", "REG", "FRT", "HST", "SBAC", "IRM",
+    "CUBE", "COLD",
+
+    # ── Materials ─────────────────────────────────────────────────────
+    "LIN", "APD", "SHW", "ECL", "PPG", "NEM", "FCX", "NUE", "STLD",
+    "RS", "AA", "DOW", "DD", "LYB", "EMN", "CE", "ALB", "FMC", "MOS",
+    "CF", "IFF", "RPM", "PKG", "IP", "SEE", "AVY", "CCK", "BALL",
+
+    # ── Industrials ───────────────────────────────────────────────────
+    "RTX", "HON", "GE", "UNP", "BA", "CAT", "LMT", "DE", "MMM",
+    "ETN", "EMR", "PH", "ITW", "GD", "NOC", "TDG", "TXT", "HII",
+    "CSX", "NSC", "UPS", "FDX", "JBHT", "WM", "RSG", "VRSK",
+    "FAST", "GWW", "CARR", "OTIS", "IR", "XYL", "GNRC", "AME", "ROP",
+    "IEX", "IDEX", "NDSN", "MAS", "SWK", "HUBB", "AOS", "LII", "TT",
+    "JCI", "EXPD", "CHRW", "XPO", "CPRT", "CTAS", "ROK", "LDOS",
+    "ODFL", "SAIA", "URI", "AXON",
 ]
 
-# Deduplicate preserving insertion order
-_seen: set = set()
-_deduped: list = []
-for _sym in SCREENER_UNIVERSE:
-    if _sym not in _seen:
-        _seen.add(_sym)
-        _deduped.append(_sym)
-SCREENER_UNIVERSE = _deduped
+
+def _fetch_sp500_universe() -> list[str]:
+    """
+    Pull the current S&P 500 constituents from Wikipedia.
+    Returns a list of Yahoo-Finance-compatible ticker symbols, or [] on failure.
+    Wikipedia table format: first <td> of each constituent row is an <a> tag
+    whose text content is the ticker symbol.
+    """
+    try:
+        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8")
+
+        # Extract tickers: first-column links in the constituents wikitable.
+        # Pattern: <td><a href="...">TICKER</a></td>
+        symbols = re.findall(
+            r'<td><a\s[^>]*>([A-Z]{1,5}(?:\.[A-Z]{1,2})?)</a></td>',
+            html,
+        )
+        # Sanity-check: S&P 500 has ~503 companies
+        if len(symbols) < 400:
+            return []
+
+        # Yahoo Finance uses '-' instead of '.' (BRK.B → BRK-B)
+        return list(dict.fromkeys(s.replace(".", "-") for s in symbols))
+    except Exception:
+        return []
+
+
+# Build the universe once at module load.
+# Uses Wikipedia when available (~503 stocks); falls back to ~450 curated stocks.
+_sp500 = _fetch_sp500_universe()
+SCREENER_UNIVERSE: list[str] = _sp500 if len(_sp500) >= 400 else _FALLBACK_UNIVERSE
+_universe_source = "S&P 500 (Wikipedia)" if len(_sp500) >= 400 else "curated fallback"
+print(f"[screener] Universe loaded: {len(SCREENER_UNIVERSE)} stocks from {_universe_source}")
+
+# Deduplicate preserving order (safety net for fallback list)
+SCREENER_UNIVERSE = list(dict.fromkeys(SCREENER_UNIVERSE))
 
 CACHE_KEY = "screener"
 CACHE_TTL = 7200        # 2 hours
@@ -235,6 +268,7 @@ def get_screener_meta():
     return {
         "total":   len(SCREENER_UNIVERSE),
         "loaded":  len(cached),
+        "source":  _universe_source,
         "sectors": sectors,
         "fields": [
             "symbol", "name", "price", "change_pct",

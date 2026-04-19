@@ -28,7 +28,13 @@ export default function App() {
   const [stockData, setStockData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [dcfSymbol, setDcfSymbol] = useState(null)
   const { list: watchlist, add: addToWatchlist, remove: removeFromWatchlist } = useWatchlist()
+
+  function handleOpenDCF(sym) {
+    setDcfSymbol(sym.toUpperCase())
+    setPage('dcf')
+  }
 
   async function handleSearch(sym) {
     setLoading(true)
@@ -140,7 +146,7 @@ export default function App() {
           {page === 'compare' && <CompareStocks />}
 
           {/* SCREENER */}
-          {page === 'screener' && <Screener onSelectStock={handleSearch} />}
+          {page === 'screener' && <Screener onSelectStock={handleSearch} onOpenDCF={handleOpenDCF} />}
 
           {/* EARNINGS */}
           {page === 'earnings' && <Earnings onSelectStock={handleSearch} />}
@@ -155,7 +161,7 @@ export default function App() {
           {page === 'alerts' && <Alerts />}
 
           {/* DCF */}
-          {page === 'dcf' && <DCF />}
+          {page === 'dcf' && <DCF initialSymbol={dcfSymbol} />}
 
         </main>
       </div>

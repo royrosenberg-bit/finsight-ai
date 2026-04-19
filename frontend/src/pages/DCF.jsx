@@ -228,7 +228,7 @@ const MODES = [
 const QUICK = ['AAPL', 'NVDA', 'META', 'MSFT', 'GOOGL', 'TSLA', 'AMZN']
 
 // ── Main ───────────────────────────────────────────────────────────────────
-export default function DCF() {
+export default function DCF({ initialSymbol = null }) {
   const [mode,        setMode]        = useState('ai_suggest')
   const [searchInput, setSearchInput] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -248,6 +248,16 @@ export default function DCF() {
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
+
+  // Auto-load when launched from Screener with a pre-selected symbol
+  const _lastInitial = useRef('')
+  useEffect(() => {
+    if (initialSymbol && initialSymbol !== _lastInitial.current) {
+      _lastInitial.current = initialSymbol
+      setSearchInput(initialSymbol)
+      loadSymbol(initialSymbol) // eslint-disable-line react-hooks/exhaustive-deps
+    }
+  }, [initialSymbol]) // eslint-disable-line react-hooks/exhaustive-deps
   const [aiLoading,   setAiLoading]   = useState(false)
   const [aiError,     setAiError]     = useState(null)
   const [asm,         setAsm]         = useState(DEFAULTS)

@@ -36,4 +36,20 @@ def get_history(symbol: str, period: str = "3m"):
             label = str(date.date())
         history.append({"date": label, "close": round(row["Close"], 2)})
 
-    return {"symbol": symbol.upper(), "period": period, "history": history}
+    # For 1D, include previous close so the chart can show change-from-yesterday
+    # instead of change-from-open (which is misleading when there's a gap).
+    previous_close = None
+    if period.lower() == "1d":
+        try:
+            daily = ticker.history(period="5d", interval="1d")
+            if len(daily) >= 2:
+                previous_close = round(float(daily["Close"].iloc[-2]), 2)
+        except Exception:
+            pass
+
+    return {
+        "symbol":         symbol.upper(),
+        "period":         period,
+        "history":        history,
+        "previous_close": previous_close,
+    }

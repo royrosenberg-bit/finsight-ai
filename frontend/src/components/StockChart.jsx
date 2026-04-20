@@ -9,19 +9,25 @@ const PERIODS = ['1D', '5D', '1W', '1M', '3M', '6M', '1Y']
 export default function StockChart({ symbol }) {
   const [period, setPeriod] = useState('3M')
   const [data, setData] = useState([])
+  const [prevClose, setPrevClose] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     setLoading(true)
     axios.get(`${API}/history/${symbol}?period=${period.toLowerCase()}`)
-      .then(res => setData(res.data.history || []))
-      .catch(() => setData([]))
+      .then(res => {
+        setData(res.data.history || [])
+        setPrevClose(res.data.previous_close || null)
+      })
+      .catch(() => { setData([]); setPrevClose(null) })
       .finally(() => setLoading(false))
   }, [symbol, period])
 
   const firstClose = data[0]?.close
-  const lastClose = data[data.length - 1]?.close
-  const changePct = firstClose && lastClose ? ((lastClose - firstClose) / firstClose * 100) : null
+  const lastClose  = data[data.length - 1]?.close
+  // 1D: use yesterday's close as baseline so gap-down/up is reflected correctly
+  const baseline   = period === '1D' && prevClose ? prevClose : firstClose
+  const changePct  = baseline && lastClose ? ((lastClose - baseline) / baseline * 100) : null
   const isPositive = changePct >= 0
   const color = isPositive ? '#22c55e' : '#ef4444'
 

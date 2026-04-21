@@ -8,20 +8,48 @@ router = APIRouter()
 
 
 def _fetch_info(sym: str, retries: int = 3) -> dict:
-    """Fetch yfinance info with exponential backoff on rate limits."""
+    """Fetch stock data using fast_info (reliable) + info (for name/sector/PE)."""
+    ticker = yf_session.Ticker(sym)
+
+    # fast_info hits a lighter endpoint — use it as the primary price source
+    result = {}
+    try:
+        fi = ticker.fast_info
+        price = fi.last_price
+        prev = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
+        if price:
+            result["currentPrice"] = float(price)
+        if prev:
+            result["previousClose"] = float(prev)
+        mc = getattr(fi, "market_cap", None)
+        if mc:
+            result["marketCap"] = int(mc)
+        yh = getattr(fi, "year_high", None)
+        yl = getattr(fi, "year_low", None)
+        if yh:
+            result["fiftyTwoWeekHigh"] = float(yh)
+        if yl:
+            result["fiftyTwoWeekLow"] = float(yl)
+    except Exception:
+        pass
+
+    # Try full info for name, sector, industry, PE — but don't fail if it's unavailable
     for attempt in range(retries):
         try:
-            info = yf_session.Ticker(sym).info or {}
-            if info:
-                return info
+            info = ticker.info or {}
+            if info and (info.get("longName") or info.get("shortName")):
+                # Merge: fast_info prices take priority, info fills in the rest
+                merged = {**info, **result}
+                return merged
         except Exception as e:
             msg = str(e).lower()
             if "too many requests" in msg or "429" in msg or "rate" in msg:
                 if attempt < retries - 1:
-                    time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                    time.sleep(2 ** attempt)
                     continue
-            raise
-    return {}
+        break
+
+    return result
 
 
 @router.get("/dcf/prefill/{symbol}")

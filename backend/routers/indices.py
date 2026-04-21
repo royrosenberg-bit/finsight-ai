@@ -21,15 +21,16 @@ def get_indices():
     for name, symbol in INDICES.items():
         try:
             ticker = yf_session.Ticker(symbol)
-            info = ticker.info
-            price = info.get("regularMarketPrice") or info.get("currentPrice")
-            prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
-            change_pct = ((price - prev) / prev * 100) if (price and prev) else None
+            # fast_info is more reliable than .info for index symbols
+            fi = ticker.fast_info
+            price = fi.last_price
+            prev = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
+            change_pct = round((price - prev) / prev * 100, 2) if (price and prev) else None
             result.append({
                 "name": name,
                 "symbol": symbol,
-                "price": round(price, 2) if price else None,
-                "change_pct": round(change_pct, 2) if change_pct is not None else None,
+                "price": round(float(price), 2) if price else None,
+                "change_pct": change_pct,
             })
         except Exception:
             result.append({"name": name, "symbol": symbol, "price": None, "change_pct": None})

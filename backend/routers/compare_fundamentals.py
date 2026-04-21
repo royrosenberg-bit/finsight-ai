@@ -16,17 +16,26 @@ router = APIRouter()
 
 
 def fetch_fundamentals(symbol: str) -> dict:
-    info = yf_session.Ticker(symbol.upper()).info
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
-    prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    ticker = yf_session.Ticker(symbol.upper())
+
+    # fast_info for reliable price data
+    fi = ticker.fast_info
+    price = fi.last_price
+    prev = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
     change_pct = ((price - prev) / prev * 100) if price and prev else None
+
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
 
     return {
         "symbol": symbol.upper(),
         "name": info.get("longName") or info.get("shortName", symbol),
-        "price": round(price, 2) if price else None,
+        "price": round(float(price), 2) if price else None,
         "change_pct": round(change_pct, 2) if change_pct is not None else None,
-        "market_cap": info.get("marketCap"),
+        "market_cap": info.get("marketCap") or getattr(fi, "market_cap", None),
         "pe_ratio": info.get("trailingPE"),
         "forward_pe": info.get("forwardPE"),
         "ps_ratio": info.get("priceToSalesTrailing12Months"),

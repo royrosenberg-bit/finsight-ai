@@ -61,18 +61,26 @@ def detect_drivers(headlines: list[str]) -> list[str]:
 
 def get_stock_context(symbol: str) -> dict:
     ticker = yf_session.Ticker(symbol.upper())
-    info = ticker.info
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
-    prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    # fast_info is reliable; use it for price data
+    fi = ticker.fast_info
+    price = fi.last_price
+    prev_close = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
     change_pct = ((price - prev_close) / prev_close * 100) if price and prev_close else None
-    name = info.get("longName") or info.get("shortName", symbol.upper())
-    sector = info.get("sector", "")
 
-    # Volume anomaly detection
-    volume = info.get("regularMarketVolume") or info.get("volume")
-    avg_volume = info.get("averageVolume") or info.get("averageDailyVolume10Day")
-    volume_ratio = round(volume / avg_volume, 2) if (volume and avg_volume and avg_volume > 0) else None
+    # Try full info for name/sector/volume — non-fatal if rate-limited
+    name = symbol.upper()
+    sector = ""
+    volume_ratio = None
+    try:
+        info = ticker.info or {}
+        name = info.get("longName") or info.get("shortName") or symbol.upper()
+        sector = info.get("sector", "")
+        volume = info.get("regularMarketVolume") or info.get("volume")
+        avg_volume = info.get("averageVolume") or info.get("averageDailyVolume10Day")
+        volume_ratio = round(volume / avg_volume, 2) if (volume and avg_volume and avg_volume > 0) else None
+    except Exception:
+        pass
 
     # Next earnings date
     next_earnings = None

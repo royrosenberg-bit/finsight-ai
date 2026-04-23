@@ -60,7 +60,9 @@ def detect_drivers(headlines: list[str]) -> list[str]:
 
 
 def get_stock_context(symbol: str) -> dict:
-    info = fetch_info(symbol.upper())
+    sym = symbol.upper()
+    info = fetch_info(sym)
+    ticker = yf_session.Ticker(sym)
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")
     prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")

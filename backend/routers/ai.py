@@ -64,6 +64,7 @@ def get_recommendation(symbol: str):
 
     sym = symbol.upper()
     info = fetch_info(sym)
+    ticker = yf_session.Ticker(sym)
 
     price = info.get("currentPrice") or info.get("regularMarketPrice")
     if not price:

@@ -861,7 +861,11 @@ export default function DCF({ initialSymbol = null }) {
                     background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.3)',
                     borderRadius: 16, padding: 24, textAlign: 'center', color: '#ef4444', fontSize: 13,
                   }}>
-                    ⚠️ WACC must be greater than Terminal Growth Rate to compute a valid valuation.
+                    {!financials?.revenue || !financials?.sharesOutstanding
+                      ? '⚠️ Revenue or shares outstanding data is unavailable. Try re-running the analysis.'
+                      : asm.wacc <= asm.terminalGrowth
+                        ? '⚠️ WACC must be greater than Terminal Growth Rate. Increase WACC or reduce Terminal Growth.'
+                        : '⚠️ Could not compute valuation. Try re-running the analysis.'}
                   </div>
                 )}
               </div>

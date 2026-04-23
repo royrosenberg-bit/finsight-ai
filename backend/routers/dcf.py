@@ -104,7 +104,12 @@ def get_dcf_data(symbol: str):
     cf_col  = _col0(cf)
 
     # ── Income statement ───────────────────────────────────────────────────
+    # Prefer info dict; fall back to income statement if info was rate-limited
     total_revenue = info.get("totalRevenue")
+    if not total_revenue and fin is not None and not fin.empty and fin_col:
+        rev_val = _safe(fin, ["Total Revenue", "Revenue", "TotalRevenue"], fin_col)
+        if rev_val:
+            total_revenue = rev_val
 
     ebit = _safe(fin, ["EBIT", "Operating Income", "Total Operating Income As Reported"], fin_col)
     if ebit is None and info.get("operatingMargins") and total_revenue:
@@ -148,8 +153,25 @@ def get_dcf_data(symbol: str):
     da_pct      = round(da        / total_revenue * 100, 1) if da         and total_revenue else None
 
     # ── Balance sheet ──────────────────────────────────────────────────────
-    total_cash = info.get("totalCash")  or 0
-    total_debt = info.get("totalDebt")  or 0
+    total_cash = info.get("totalCash") or 0
+    total_debt = info.get("totalDebt") or 0
+    # Fallback: get cash/debt from balance sheet when info is rate-limited
+    if not total_cash or not total_debt:
+        try:
+            bs = ticker.balance_sheet
+            if bs is not None and not bs.empty:
+                bs_col = bs.columns[0]
+                if not total_cash:
+                    cash_val = _safe(bs, ["Cash And Cash Equivalents",
+                        "Cash Cash Equivalents And Short Term Investments",
+                        "Cash Financial"], bs_col)
+                    total_cash = cash_val or 0
+                if not total_debt:
+                    debt_val = _safe(bs, ["Total Debt", "Long Term Debt",
+                        "Current Debt And Capital Lease Obligation"], bs_col)
+                    total_debt = debt_val or 0
+        except Exception:
+            pass
     net_debt_b = round((total_debt - total_cash) / 1e9, 2)
 
     # ── Revenue history (up to 4 years, oldest first) ──────────────────────
@@ -182,7 +204,7 @@ def get_dcf_data(symbol: str):
         "industry":          info.get("industry", ""),
         "market_cap":        info.get("marketCap"),
         "enterprise_value":  info.get("enterpriseValue"),
-        "shares_outstanding":info.get("sharesOutstanding"),
+        "shares_outstanding":info.get("sharesOutstanding") or (int(ticker.fast_info.shares) if getattr(ticker.fast_info, "shares", None) else None),
         "total_cash":        total_cash,
         "total_debt":        total_debt,
         "net_debt":          net_debt_b,

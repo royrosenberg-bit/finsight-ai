@@ -8,7 +8,11 @@ router = APIRouter()
 @router.get("/analysts/{symbol}")
 def get_analysts(symbol: str):
     ticker = yf_session.Ticker(symbol.upper())
-    info = ticker.info
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
 
     if not info:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")

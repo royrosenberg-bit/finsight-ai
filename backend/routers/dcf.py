@@ -71,11 +71,19 @@ def _col0(df):
 @router.get("/dcf/data/{symbol}")
 def get_dcf_data(symbol: str):
     ticker = yf_session.Ticker(symbol.upper())
-    info = ticker.info
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    # fast_info for reliable price
+    fi = ticker.fast_info
+    price = fi.last_price
     if not price:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
+
+    # Full info for financials — non-fatal if rate-limited
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
 
     # ── Financial statements ───────────────────────────────────────────────
     fin = None

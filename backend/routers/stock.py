@@ -55,11 +55,17 @@ def _fetch_info(sym: str, retries: int = 3) -> dict:
 @router.get("/dcf/prefill/{symbol}")
 def dcf_prefill(symbol: str):
     ticker = yf_session.Ticker(symbol.upper())
-    info = ticker.info
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    fi = ticker.fast_info
+    price = fi.last_price
     if not price:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
+
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
 
     name = info.get("longName") or info.get("shortName", symbol.upper())
 

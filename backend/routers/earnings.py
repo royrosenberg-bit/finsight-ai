@@ -11,7 +11,11 @@ POPULAR = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "JPM", "NFLX
 def get_earnings_date(symbol):
     try:
         ticker = yf_session.Ticker(symbol)
-        info = ticker.info
+        info = {}
+        try:
+            info = ticker.info or {}
+        except Exception:
+            pass
         name = info.get("longName") or info.get("shortName", symbol)
 
         # Try calendar first

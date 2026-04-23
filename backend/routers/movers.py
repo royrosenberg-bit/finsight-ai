@@ -11,22 +11,66 @@ import cache
 
 router = APIRouter()
 
-# Fallback universe — 20 large-caps with static names (no .info needed)
+# Fallback universe — 80 stocks across all sectors (single batch download)
 FALLBACK_UNIVERSE = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN",
-    "META", "TSLA", "JPM", "V", "UNH",
-    "XOM", "JNJ", "WMT", "AVGO", "AMD",
-    "NFLX", "BAC", "MA", "LLY", "COST",
+    # Technology
+    "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AVGO", "AMD", "ORCL",
+    "ADBE", "CRM", "INTC", "QCOM", "NOW", "INTU", "AMAT", "MU",
+    # Communication
+    "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS",
+    # Consumer Cyclical
+    "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "BKNG",
+    # Consumer Defensive
+    "WMT", "PG", "KO", "PEP", "COST", "PM", "MO",
+    # Healthcare
+    "LLY", "UNH", "JNJ", "ABBV", "MRK", "TMO", "ABT", "AMGN",
+    "ISRG", "GILD", "VRTX", "REGN", "BSX", "MDT",
+    # Financials
+    "JPM", "BAC", "WFC", "GS", "MS", "BLK", "AXP", "V", "MA",
+    "C", "SCHW", "COF", "CB",
+    # Industrials
+    "CAT", "HON", "UPS", "BA", "GE", "RTX", "LMT", "DE", "MMM",
+    # Energy
+    "XOM", "CVX", "COP", "SLB", "EOG", "OXY", "MPC", "PSX",
+    # Utilities
+    "NEE", "DUK", "SO",
+    # Basic Materials
+    "LIN", "SHW", "FCX", "NEM",
 ]
 
 FALLBACK_NAMES = {
     "AAPL": "Apple Inc.", "MSFT": "Microsoft Corp.", "NVDA": "NVIDIA Corp.",
-    "GOOGL": "Alphabet Inc.", "AMZN": "Amazon.com Inc.", "META": "Meta Platforms Inc.",
-    "TSLA": "Tesla Inc.", "JPM": "JPMorgan Chase & Co.", "V": "Visa Inc.",
-    "UNH": "UnitedHealth Group", "XOM": "Exxon Mobil Corp.", "JNJ": "Johnson & Johnson",
-    "WMT": "Walmart Inc.", "AVGO": "Broadcom Inc.", "AMD": "Advanced Micro Devices",
-    "NFLX": "Netflix Inc.", "BAC": "Bank of America Corp.", "MA": "Mastercard Inc.",
-    "LLY": "Eli Lilly and Co.", "COST": "Costco Wholesale Corp.",
+    "GOOGL": "Alphabet Inc.", "META": "Meta Platforms Inc.", "AVGO": "Broadcom Inc.",
+    "AMD": "Advanced Micro Devices", "ORCL": "Oracle Corp.", "ADBE": "Adobe Inc.",
+    "CRM": "Salesforce Inc.", "INTC": "Intel Corp.", "QCOM": "Qualcomm Inc.",
+    "NOW": "ServiceNow Inc.", "INTU": "Intuit Inc.", "AMAT": "Applied Materials",
+    "MU": "Micron Technology", "NFLX": "Netflix Inc.", "DIS": "Walt Disney Co.",
+    "CMCSA": "Comcast Corp.", "T": "AT&T Inc.", "VZ": "Verizon Communications",
+    "TMUS": "T-Mobile US Inc.", "AMZN": "Amazon.com Inc.", "TSLA": "Tesla Inc.",
+    "HD": "Home Depot Inc.", "MCD": "McDonald's Corp.", "NKE": "Nike Inc.",
+    "SBUX": "Starbucks Corp.", "LOW": "Lowe's Companies", "BKNG": "Booking Holdings",
+    "WMT": "Walmart Inc.", "PG": "Procter & Gamble", "KO": "Coca-Cola Co.",
+    "PEP": "PepsiCo Inc.", "COST": "Costco Wholesale Corp.", "PM": "Philip Morris",
+    "MO": "Altria Group", "LLY": "Eli Lilly and Co.", "UNH": "UnitedHealth Group",
+    "JNJ": "Johnson & Johnson", "ABBV": "AbbVie Inc.", "MRK": "Merck & Co.",
+    "TMO": "Thermo Fisher Scientific", "ABT": "Abbott Laboratories",
+    "AMGN": "Amgen Inc.", "ISRG": "Intuitive Surgical", "GILD": "Gilead Sciences",
+    "VRTX": "Vertex Pharmaceuticals", "REGN": "Regeneron Pharmaceuticals",
+    "BSX": "Boston Scientific", "MDT": "Medtronic plc",
+    "JPM": "JPMorgan Chase & Co.", "BAC": "Bank of America Corp.",
+    "WFC": "Wells Fargo & Co.", "GS": "Goldman Sachs Group", "MS": "Morgan Stanley",
+    "BLK": "BlackRock Inc.", "AXP": "American Express Co.", "V": "Visa Inc.",
+    "MA": "Mastercard Inc.", "C": "Citigroup Inc.", "SCHW": "Charles Schwab Corp.",
+    "COF": "Capital One Financial", "CB": "Chubb Ltd.",
+    "CAT": "Caterpillar Inc.", "HON": "Honeywell International", "UPS": "United Parcel Service",
+    "BA": "Boeing Co.", "GE": "GE Aerospace", "RTX": "RTX Corp.",
+    "LMT": "Lockheed Martin Corp.", "DE": "Deere & Co.", "MMM": "3M Co.",
+    "XOM": "Exxon Mobil Corp.", "CVX": "Chevron Corp.", "COP": "ConocoPhillips",
+    "SLB": "SLB (Schlumberger)", "EOG": "EOG Resources", "OXY": "Occidental Petroleum",
+    "MPC": "Marathon Petroleum", "PSX": "Phillips 66",
+    "NEE": "NextEra Energy", "DUK": "Duke Energy Corp.", "SO": "Southern Co.",
+    "LIN": "Linde plc", "SHW": "Sherwin-Williams Co.", "FCX": "Freeport-McMoRan",
+    "NEM": "Newmont Corp.",
 }
 
 

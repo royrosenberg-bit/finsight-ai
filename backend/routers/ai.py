@@ -6,9 +6,9 @@ Returns structured verdict with bull/bear case, price target, and key risks.
 import os
 import json
 from fastapi import APIRouter, HTTPException
-import yfinance as yf
 import yf_session
 import anthropic
+from yf_helpers import fetch_info
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -63,23 +63,14 @@ def get_recommendation(symbol: str):
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
 
     sym = symbol.upper()
-    ticker = yf_session.Ticker(sym)
+    info = fetch_info(sym)
 
-    # fast_info for reliable price — non-blocking even when Yahoo throttles
-    fi = ticker.fast_info
-    price = fi.last_price
-    prev_close = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
-    change_pct = ((price - prev_close) / prev_close * 100) if (price and prev_close) else None
-
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
     if not price:
         raise HTTPException(status_code=404, detail=f"Symbol '{sym}' not found")
 
-    # Full info for fundamentals — fall back to empty dict if rate-limited
-    info = {}
-    try:
-        info = ticker.info or {}
-    except Exception:
-        pass
+    prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    change_pct = ((price - prev_close) / prev_close * 100) if (price and prev_close) else None
 
     # ── Fundamentals ───────────────────────────────────────────────────────
     name          = info.get("longName") or sym

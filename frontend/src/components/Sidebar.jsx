@@ -1,13 +1,13 @@
 const NAV = [
   { id: 'home',      icon: '🏠', label: 'Home' },
   { id: 'analyze',   icon: '🔍', label: 'Analyze' },
+  { id: 'portfolio', icon: '💼', label: 'Portfolio' },
+  { id: 'dcf',       icon: '📐', label: 'DCF Calculator' },
   { id: 'compare',   icon: '📊', label: 'Compare' },
+  { id: 'watchlist', icon: '⭐', label: 'Watchlist' },
   { id: 'screener',  icon: '📉', label: 'Screener' },
   { id: 'earnings',  icon: '📅', label: 'Earnings' },
-  { id: 'portfolio', icon: '💼', label: 'Portfolio' },
-  { id: 'watchlist', icon: '⭐', label: 'Watchlist' },
   { id: 'alerts',    icon: '🔔', label: 'Alerts' },
-  { id: 'dcf',       icon: '📐', label: 'DCF Calculator' },
 ]
 
 export default function Sidebar({ active, onChange }) {

@@ -1,151 +1,60 @@
 """
-Stock Screener — expanded universe, enriched data fields, stale-while-revalidate caching,
-and AI natural-language search powered by Claude.
+Stock Screener — curated 80-stock universe, stable and rate-limit safe.
+Uses the shared fetch_info cache so screener loads don't interfere with
+the rest of the app (Analyze, Portfolio, DCF).
 """
 import os
 import json
 import re
 import time
-import urllib.request
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import anthropic
 from dotenv import load_dotenv
-import yf_session
 import cache
+from yf_helpers import fetch_info, SECTOR_FALLBACK
 
 load_dotenv()
-
 router = APIRouter()
 
-# ── Stock universe ────────────────────────────────────────────────────────────
-# Primary: fetch current S&P 500 constituents from Wikipedia at startup.
-# Fallback: hardcoded ~450-stock list used if Wikipedia is unreachable.
-
-_FALLBACK_UNIVERSE = [
-    # ── Information Technology ────────────────────────────────────────
-    "AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CRM", "CSCO", "ADBE", "AMD", "ACN",
-    "TXN", "QCOM", "INTC", "AMAT", "KLAC", "LRCX", "MU", "NOW", "PANW", "SNPS",
-    "CDNS", "FTNT", "APH", "IT", "KEYS", "ANSS", "NTAP", "GDDY", "VRSN", "CTSH",
-    "GLW", "HPQ", "HPE", "STX", "MPWR", "MCHP", "SWKS", "AKAM", "ZBRA", "CDW",
-    "WDC", "FFIV", "JNPR", "GEN", "ON", "MRVL", "SMCI", "FSLR", "ENPH", "TDY",
-
-    # ── Communication Services ────────────────────────────────────────
-    "GOOGL", "META", "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS", "CHTR",
-    "PARA", "WBD", "OMC", "IPG", "EA", "TTWO", "MTCH", "NWSA", "NWS",
-    "FOX", "FOXA", "LYV", "NYT",
-
-    # ── Consumer Discretionary ────────────────────────────────────────
-    "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "TJX", "BKNG",
-    "CMG", "YUM", "ORLY", "AZO", "ROST", "DHI", "LEN", "PHM", "NVR",
-    "ULTA", "RL", "HAS", "MAT", "MGM", "CZR", "WYNN", "LVS", "RCL",
-    "CCL", "NCLH", "MAR", "HLT", "EXPE", "ABNB", "DKNG", "F", "GM",
-    "APTV", "BWA", "LKQ", "KMX", "AN", "POOL", "LULU", "DRI", "EAT",
-    "QSR", "DPZ", "GRMN", "BOOT",
-
-    # ── Consumer Staples ──────────────────────────────────────────────
-    "WMT", "PG", "KO", "PEP", "COST", "PM", "MO", "CL", "MDLZ", "KHC",
-    "STZ", "GIS", "K", "HSY", "SJM", "CPB", "MKC", "HRL", "CHD", "CLX",
-    "EL", "TSN", "CAG", "KR", "SYY", "BG", "ADM",
-
-    # ── Healthcare ────────────────────────────────────────────────────
-    "UNH", "LLY", "JNJ", "ABBV", "MRK", "TMO", "ABT", "DHR", "BMY",
-    "AMGN", "ISRG", "SYK", "GILD", "MDT", "CI", "HCA", "BSX", "EW",
-    "VRTX", "REGN", "ZTS", "IQV", "CVS", "HUM", "CNC", "MCK", "CAH",
-    "ABC", "BIIB", "ILMN", "DXCM", "HOLX", "RMD", "BDX", "ZBH",
-    "IDXX", "WAT", "A", "MRNA", "GEHC", "PODD", "ALGN", "MTD", "CRL",
-    "BAX", "HSIC", "MOH", "ELV", "PFE", "VTRS",
-
-    # ── Financials ────────────────────────────────────────────────────
-    "BRK-B", "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW",
-    "AXP", "V", "MA", "COF", "DFS", "SYF", "ALLY", "USB", "PNC",
-    "TFC", "MTB", "CFG", "FITB", "HBAN", "KEY", "RF", "STT", "BK",
-    "NTRS", "TRV", "AIG", "MET", "PRU", "AFL", "ALL", "PGR", "CB",
-    "MMC", "AON", "AJG", "WTW", "HIG", "CINF", "ICE", "CME", "NDAQ",
-    "CBOE", "SPGI", "MCO", "FDS", "MSCI", "RJF", "TROW", "IVZ", "BEN",
-    "ACGL", "RE", "WRB", "MKL", "COIN", "PYPL", "SQ", "SOFI",
-
-    # ── Energy ────────────────────────────────────────────────────────
-    "XOM", "CVX", "COP", "EOG", "SLB", "MPC", "PSX", "VLO", "OXY",
-    "DVN", "HAL", "BKR", "FANG", "HES", "APA", "MRO", "EQT", "CTRA",
-    "OKE", "WMB", "KMI", "TRGP", "LNG",
-
-    # ── Utilities ─────────────────────────────────────────────────────
-    "NEE", "DUK", "SO", "D", "AES", "EXC", "XEL", "PCG", "ED", "ETR",
-    "FE", "ES", "WEC", "PPL", "DTE", "LNT", "AEE", "EVRG", "NI",
-    "PNW", "ATO", "NRG", "CEG", "SRE", "AWK",
-
-    # ── Real Estate ───────────────────────────────────────────────────
-    "AMT", "PLD", "EQIX", "CCI", "SPG", "O", "DLR", "WELL", "PSA",
-    "EXR", "AVB", "EQR", "UDR", "CPT", "ESS", "MAA", "NNN", "VICI",
-    "WPC", "BXP", "VNO", "KIM", "REG", "FRT", "HST", "SBAC", "IRM",
-    "CUBE", "COLD",
-
-    # ── Materials ─────────────────────────────────────────────────────
-    "LIN", "APD", "SHW", "ECL", "PPG", "NEM", "FCX", "NUE", "STLD",
-    "RS", "AA", "DOW", "DD", "LYB", "EMN", "CE", "ALB", "FMC", "MOS",
-    "CF", "IFF", "RPM", "PKG", "IP", "SEE", "AVY", "CCK", "BALL",
-
-    # ── Industrials ───────────────────────────────────────────────────
-    "RTX", "HON", "GE", "UNP", "BA", "CAT", "LMT", "DE", "MMM",
-    "ETN", "EMR", "PH", "ITW", "GD", "NOC", "TDG", "TXT", "HII",
-    "CSX", "NSC", "UPS", "FDX", "JBHT", "WM", "RSG", "VRSK",
-    "FAST", "GWW", "CARR", "OTIS", "IR", "XYL", "GNRC", "AME", "ROP",
-    "IEX", "IDEX", "NDSN", "MAS", "SWK", "HUBB", "AOS", "LII", "TT",
-    "JCI", "EXPD", "CHRW", "XPO", "CPRT", "CTAS", "ROK", "LDOS",
-    "ODFL", "SAIA", "URI", "AXON",
+# ── Curated 80-stock universe ─────────────────────────────────────────────────
+# Hand-picked across all sectors — enough to make filters meaningful,
+# small enough to never cause rate limit problems.
+SCREENER_UNIVERSE = [
+    # Technology (16)
+    "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AVGO", "AMD", "ORCL",
+    "ADBE", "CRM", "INTC", "QCOM", "NOW", "INTU", "AMAT", "MU",
+    # Communication Services (6)
+    "NFLX", "DIS", "CMCSA", "T", "VZ", "TMUS",
+    # Consumer Cyclical (8)
+    "AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "LOW", "BKNG",
+    # Consumer Defensive (7)
+    "WMT", "PG", "KO", "PEP", "COST", "PM", "MO",
+    # Healthcare (12)
+    "LLY", "UNH", "JNJ", "ABBV", "MRK", "TMO", "ABT",
+    "AMGN", "ISRG", "GILD", "VRTX", "REGN",
+    # Financials (11)
+    "JPM", "BAC", "WFC", "GS", "MS", "BLK", "AXP", "V", "MA", "C", "SCHW",
+    # Industrials (8)
+    "CAT", "HON", "UPS", "BA", "GE", "RTX", "LMT", "DE",
+    # Energy (8)
+    "XOM", "CVX", "COP", "SLB", "EOG", "OXY", "MPC", "PSX",
+    # Utilities (3)
+    "NEE", "DUK", "SO",
+    # Basic Materials (4)
+    "LIN", "SHW", "FCX", "NEM",
 ]
-
-
-def _fetch_sp500_universe() -> list[str]:
-    """
-    Pull the current S&P 500 constituents from Wikipedia.
-    Returns a list of Yahoo-Finance-compatible ticker symbols, or [] on failure.
-    Wikipedia table format: first <td> of each constituent row is an <a> tag
-    whose text content is the ticker symbol.
-    """
-    try:
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            html = resp.read().decode("utf-8")
-
-        # Extract tickers: first-column links in the constituents wikitable.
-        # Pattern: <td><a href="...">TICKER</a></td>
-        symbols = re.findall(
-            r'<td><a\s[^>]*>([A-Z]{1,5}(?:\.[A-Z]{1,2})?)</a></td>',
-            html,
-        )
-        # Sanity-check: S&P 500 has ~503 companies
-        if len(symbols) < 400:
-            return []
-
-        # Yahoo Finance uses '-' instead of '.' (BRK.B → BRK-B)
-        return list(dict.fromkeys(s.replace(".", "-") for s in symbols))
-    except Exception:
-        return []
-
-
-# Build the universe once at module load.
-# Uses Wikipedia when available (~503 stocks); falls back to ~450 curated stocks.
-_sp500 = _fetch_sp500_universe()
-SCREENER_UNIVERSE: list[str] = _sp500 if len(_sp500) >= 400 else _FALLBACK_UNIVERSE
-_universe_source = "S&P 500 (Wikipedia)" if len(_sp500) >= 400 else "curated fallback"
-print(f"[screener] Universe loaded: {len(SCREENER_UNIVERSE)} stocks from {_universe_source}")
-
-# Deduplicate preserving order (safety net for fallback list)
-SCREENER_UNIVERSE = list(dict.fromkeys(SCREENER_UNIVERSE))
 
 CACHE_KEY = "screener"
 CACHE_TTL = 7200        # 2 hours
-_is_refreshing = False  # guard against concurrent background refreshes
+_is_refreshing = False
 
 
 def fetch_stock(symbol: str) -> dict | None:
-    """Fetch enriched quote + fundamentals for one symbol. Returns None on any failure."""
+    """Fetch enriched quote for one symbol using the shared info cache."""
     try:
-        info = yf_session.Ticker(symbol).info
+        info = fetch_info(symbol)
         price = info.get("currentPrice") or info.get("regularMarketPrice")
         if not price:
             return None
@@ -157,21 +66,18 @@ def fetch_stock(symbol: str) -> dict | None:
         lo = info.get("fiftyTwoWeekLow")
         week52_pos = (
             round((price - lo) / (hi - lo) * 100, 1)
-            if (hi and lo and hi != lo)
-            else None
+            if (hi and lo and hi != lo) else None
         )
 
         avg_vol   = info.get("averageVolume")
         vol       = info.get("volume")
-        vol_ratio = (
-            round(vol / avg_vol, 2)
-            if (vol and avg_vol and avg_vol > 0)
-            else None
-        )
+        vol_ratio = round(vol / avg_vol, 2) if (vol and avg_vol and avg_vol > 0) else None
 
         div_yield    = info.get("dividendYield")
         rev_growth   = info.get("revenueGrowth")
         gross_margin = info.get("grossMargins")
+
+        sector = info.get("sector") or SECTOR_FALLBACK.get(symbol)
 
         return {
             "symbol":         symbol,
@@ -185,23 +91,23 @@ def fetch_stock(symbol: str) -> dict | None:
             "dividend_yield": round(div_yield * 100, 2) if div_yield else None,
             "revenue_growth": round(rev_growth * 100, 1) if rev_growth else None,
             "gross_margin":   round(gross_margin * 100, 1) if gross_margin else None,
-            "sector":         info.get("sector"),
+            "sector":         sector,
             "industry":       info.get("industry"),
             "week_52_high":   hi,
             "week_52_low":    lo,
-            "week_52_pos":    week52_pos,   # 0=at 52w low, 100=at 52w high
+            "week_52_pos":    week52_pos,
             "avg_volume":     avg_vol,
             "volume":         vol,
-            "volume_ratio":   vol_ratio,    # vs avg; >1.5 = elevated volume
+            "volume_ratio":   vol_ratio,
         }
     except Exception:
         return None
 
 
 def _build_screener() -> list[dict]:
-    """Fetch all stocks in the universe concurrently. ~5 workers to stay under rate limits."""
+    """Fetch all 80 stocks with 3 workers — well within Yahoo Finance limits."""
     results = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(fetch_stock, sym): sym for sym in SCREENER_UNIVERSE}
         for future in as_completed(futures):
             data = future.result()
@@ -212,7 +118,6 @@ def _build_screener() -> list[dict]:
 
 
 def _refresh_in_background() -> None:
-    """Rebuild screener data and store in cache. Runs in a background thread."""
     global _is_refreshing
     if _is_refreshing:
         return
@@ -227,14 +132,8 @@ def _refresh_in_background() -> None:
 
 @router.get("/screener")
 def get_screener(background_tasks: BackgroundTasks):
-    """
-    Return screener data.
-    - If cache is warm: return immediately, refresh in background if stale.
-    - If cache is cold: fetch synchronously (first load or after long downtime).
-    """
     cached = cache.get(CACHE_KEY)
     if cached:
-        # Kick off a background refresh if data is older than 90% of TTL
         entry = cache._store.get(CACHE_KEY)
         if entry:
             age = time.time() - (entry["expires"] - CACHE_TTL)
@@ -242,7 +141,6 @@ def get_screener(background_tasks: BackgroundTasks):
                 background_tasks.add_task(_refresh_in_background)
         return cached
 
-    # Cold start — must wait
     results = _build_screener()
     cache.set(CACHE_KEY, results, ttl=CACHE_TTL)
     return results
@@ -250,33 +148,22 @@ def get_screener(background_tasks: BackgroundTasks):
 
 @router.get("/screener/meta")
 def get_screener_meta():
-    """
-    Return metadata about the current screener dataset:
-    available sectors, stock count, and field list.
-    Useful for building dynamic filter UIs.
-    """
     cached = cache.get(CACHE_KEY)
     if not cached:
-        return {
-            "total": len(SCREENER_UNIVERSE),
-            "loaded": 0,
-            "sectors": [],
-            "fields": [],
-        }
+        return {"total": len(SCREENER_UNIVERSE), "loaded": 0, "sectors": [], "fields": []}
 
     sectors = sorted({s["sector"] for s in cached if s.get("sector")})
     return {
         "total":   len(SCREENER_UNIVERSE),
         "loaded":  len(cached),
-        "source":  _universe_source,
+        "source":  "curated universe",
         "sectors": sectors,
-        "fields": [
+        "fields":  [
             "symbol", "name", "price", "change_pct",
             "market_cap", "pe_ratio", "forward_pe", "beta",
             "dividend_yield", "revenue_growth", "gross_margin",
-            "sector", "industry",
-            "week_52_high", "week_52_low", "week_52_pos",
-            "volume", "avg_volume", "volume_ratio",
+            "sector", "industry", "week_52_high", "week_52_low",
+            "week_52_pos", "volume", "avg_volume", "volume_ratio",
         ],
     }
 
@@ -284,7 +171,6 @@ def get_screener_meta():
 # ── AI Natural-Language Search ────────────────────────────────────────────────
 
 def _extract_json(text: str) -> dict:
-    """Robustly extract JSON from Claude's response."""
     text = text.strip()
     try:
         return json.loads(text)
@@ -311,37 +197,20 @@ class AISearchRequest(BaseModel):
 
 @router.post("/screener/ai-search")
 def ai_screener_search(req: AISearchRequest):
-    """
-    Natural-language stock search powered by Claude.
-    Reads the screener cache, builds a compact summary, asks Claude to find
-    matching stocks, and returns matches with per-stock explanations.
-    """
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set")
 
     stocks = cache.get(CACHE_KEY)
     if not stocks:
-        raise HTTPException(
-            status_code=503,
-            detail="Screener data not loaded yet — visit /api/screener first, then retry.",
-        )
+        raise HTTPException(status_code=503, detail="Screener data not loaded yet — open the Screener page first, then retry.")
 
-    # Limit to top 200 stocks by market cap to stay within token limits.
-    # This still covers every major company the user is likely asking about.
-    ranked = sorted(
-        [s for s in stocks if s.get("market_cap")],
-        key=lambda s: s["market_cap"],
-        reverse=True,
-    )[:200]
-
-    # Ultra-compact format: ~35 chars per row → ~7,000 chars → ~1,750 tokens
     def _row(s: dict) -> str:
         pe  = s.get("forward_pe") or s.get("pe_ratio")
-        cap = s["market_cap"]
+        cap = s.get("market_cap") or 0
         cap_str = f"{cap/1e12:.1f}T" if cap >= 1e12 else f"{cap/1e9:.0f}B"
         return (
-            f"{s['symbol']} {s.get('sector','?')[:3]}"
+            f"{s['symbol']} {(s.get('sector') or '?')[:3]}"
             f" {cap_str}"
             f" pe{round(pe) if pe else '-'}"
             f" g{round(s['revenue_growth']) if s.get('revenue_growth') is not None else '-'}%"
@@ -350,24 +219,18 @@ def ai_screener_search(req: AISearchRequest):
             f" 52:{round(s['week_52_pos']) if s.get('week_52_pos') is not None else '-'}"
         )
 
-    universe_text = "\n".join(_row(s) for s in ranked)
+    universe_text = "\n".join(_row(s) for s in stocks)
 
     prompt = f"""You are a professional stock screener AI. The user described what they want in plain English.
 
 User query: "{req.query}"
 
-Stock universe (symbol|sector|cap|pe|revenueGrowth|divYield|grossMargin|beta|52wPos|dayChange):
+Stock universe (symbol|sector|cap|pe|revenueGrowth|divYield|grossMargin|52wPos):
 {universe_text}
 
-Task:
-1. Interpret what the user is looking for (be specific about which metrics matter).
-2. Select the 8–12 stocks from the universe that BEST match the query.
-3. For each, write a 1-sentence reason citing actual numbers from the data above.
-4. Suggest filter values the user could apply (null if not applicable).
-
-Respond ONLY with raw JSON (no markdown):
+Select 6–10 stocks that best match. Respond ONLY with raw JSON:
 {{
-  "interpretation": "<1–2 sentences: what you understood the user wants>",
+  "interpretation": "<1-2 sentences: what you understood>",
   "matches": [
     {{"symbol": "AAPL", "reason": "<specific reason with numbers>", "confidence": "High|Medium|Low"}},
     ...
@@ -387,16 +250,13 @@ Respond ONLY with raw JSON (no markdown):
         client = anthropic.Anthropic(api_key=api_key)
         msg = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1400,
+            max_tokens=1200,
             messages=[{"role": "user", "content": prompt}],
         )
         result = _extract_json(msg.content[0].text.strip())
-
-        # Enrich each match with its full stock data from cache
         stock_map = {s["symbol"]: s for s in stocks}
         for m in result.get("matches", []):
             m["stock"] = stock_map.get(m["symbol"])
-
         return result
     except (json.JSONDecodeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {e}")

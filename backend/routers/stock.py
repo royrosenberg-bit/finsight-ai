@@ -133,7 +133,7 @@ def get_stock(symbol: str):
             "industry": info.get("industry"),
             "history": history,
         }
-        cache.set(f"stock:{sym}", result, ttl=1800)  # 30 min
+        cache.set(f"stock:{sym}", result, ttl=14400)  # 4 hours
         return result
     except HTTPException:
         raise

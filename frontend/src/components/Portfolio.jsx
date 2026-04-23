@@ -143,41 +143,47 @@ export default function Portfolio({ onSelectStock }) {
 
   const [activeTab, setActiveTab] = useState('overview') // overview | holdings | analysis
 
-  // ── Fetch prices for all holdings ─────────────────────────────────────────
+  // ── Fetch prices for all holdings (batched to avoid rate limits) ──────────
   useEffect(() => {
     const missing = holdings.filter(h => !prices[h.symbol] && !failedSymbols.has(h.symbol))
     if (missing.length === 0) return
     setLoadingPrices(true)
-    Promise.allSettled(
-      missing.map(h =>
-        axios.get(`${API}/stock/${h.symbol}`).then(r => ({ symbol: h.symbol, data: r.data }))
-      )
-    ).then(results => {
+
+    async function fetchBatched() {
+      const BATCH = 3
       const failed = new Set(failedSymbols)
-      results.forEach(r => {
-        if (r.status === 'fulfilled') {
-          const { symbol, data } = r.value
-          if (data.price) {
-            setPrices(p => ({ ...p, [symbol]: data.price }))
-            setStockMeta(m => ({
-              ...m,
-              [symbol]: {
-                name: data.name, sector: data.sector || '',
-                change_pct: data.change_pct ?? 0, beta: data.beta || 1.0,
-              }
-            }))
+      for (let i = 0; i < missing.length; i += BATCH) {
+        const batch = missing.slice(i, i + BATCH)
+        const results = await Promise.allSettled(
+          batch.map(h => axios.get(`${API}/stock/${h.symbol}`).then(r => ({ symbol: h.symbol, data: r.data })))
+        )
+        results.forEach((r, idx) => {
+          if (r.status === 'fulfilled') {
+            const { symbol, data } = r.value
+            if (data.price) {
+              setPrices(p => ({ ...p, [symbol]: data.price }))
+              setStockMeta(m => ({
+                ...m,
+                [symbol]: {
+                  name: data.name, sector: data.sector || '',
+                  change_pct: data.change_pct ?? 0, beta: data.beta || 1.0,
+                }
+              }))
+            } else {
+              failed.add(symbol)
+            }
           } else {
-            failed.add(r.value.symbol)
+            failed.add(batch[idx]?.symbol)
           }
-        } else {
-          // Extract symbol from the original request
-          const sym = missing[results.indexOf(r)]?.symbol
-          if (sym) failed.add(sym)
-        }
-      })
+        })
+        // Small delay between batches to avoid hitting Yahoo Finance rate limits
+        if (i + BATCH < missing.length) await new Promise(res => setTimeout(res, 400))
+      }
       setFailedSymbols(failed)
       setLoadingPrices(false)
-    })
+    }
+
+    fetchBatched()
   }, [holdings])
 
   // ── Derived metrics ────────────────────────────────────────────────────────

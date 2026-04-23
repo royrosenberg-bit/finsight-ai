@@ -42,11 +42,20 @@ router = APIRouter()
 
 def get_debate_context(symbol: str) -> dict:
     ticker = yf_session.Ticker(symbol.upper())
-    info = ticker.info
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
-    prev = info.get("previousClose") or info.get("regularMarketPreviousClose")
+    # fast_info for reliable price data
+    fi = ticker.fast_info
+    price = fi.last_price
+    prev = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
     change_pct = round((price - prev) / prev * 100, 2) if price and prev else None
+
+    # Full info for fundamentals — non-fatal if rate-limited
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
+
     name = info.get("longName") or info.get("shortName", symbol.upper())
 
     # Fundamentals

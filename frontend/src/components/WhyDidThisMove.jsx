@@ -126,7 +126,7 @@ export default function WhyDidThisMove({ symbol }) {
                 Why Did {data.symbol} Move?
               </span>
               <span style={{ fontSize: 14, fontWeight: 800, color: moveColor, background: isUp ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', padding: '1px 8px', borderRadius: 6 }}>
-                {isUp ? '+' : ''}{data.change_pct}%
+                {isUp ? '+' : ''}{(data.change_pct ?? 0).toFixed(2)}%
               </span>
               {showVolumeAlert && (
                 <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', padding: '1px 8px', borderRadius: 6 }}>

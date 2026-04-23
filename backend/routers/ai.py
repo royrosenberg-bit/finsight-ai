@@ -64,14 +64,22 @@ def get_recommendation(symbol: str):
 
     sym = symbol.upper()
     ticker = yf_session.Ticker(sym)
-    info = ticker.info or {}
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    # fast_info for reliable price — non-blocking even when Yahoo throttles
+    fi = ticker.fast_info
+    price = fi.last_price
+    prev_close = getattr(fi, "previous_close", None) or getattr(fi, "regular_market_previous_close", None)
+    change_pct = ((price - prev_close) / prev_close * 100) if (price and prev_close) else None
+
     if not price:
         raise HTTPException(status_code=404, detail=f"Symbol '{sym}' not found")
 
-    prev_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
-    change_pct = ((price - prev_close) / prev_close * 100) if (price and prev_close) else None
+    # Full info for fundamentals — fall back to empty dict if rate-limited
+    info = {}
+    try:
+        info = ticker.info or {}
+    except Exception:
+        pass
 
     # ── Fundamentals ───────────────────────────────────────────────────────
     name          = info.get("longName") or sym

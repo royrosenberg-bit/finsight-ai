@@ -7,10 +7,10 @@ import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import yfinance as yf
 import yf_session
 import anthropic
 from dotenv import load_dotenv
+from yf_helpers import fetch_info
 
 load_dotenv()
 router = APIRouter()
@@ -70,20 +70,14 @@ def _col0(df):
 
 @router.get("/dcf/data/{symbol}")
 def get_dcf_data(symbol: str):
-    ticker = yf_session.Ticker(symbol.upper())
+    sym = symbol.upper()
+    ticker = yf_session.Ticker(sym)
 
-    # fast_info for reliable price
-    fi = ticker.fast_info
-    price = fi.last_price
+    # Use shared cache — gets price + all fundamentals reliably
+    info = fetch_info(sym)
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
     if not price:
         raise HTTPException(status_code=404, detail=f"Symbol '{symbol}' not found")
-
-    # Full info for financials — non-fatal if rate-limited
-    info = {}
-    try:
-        info = ticker.info or {}
-    except Exception:
-        pass
 
     # ── Financial statements ───────────────────────────────────────────────
     fin = None
@@ -261,8 +255,8 @@ Respond with ONLY raw JSON (no markdown, no code block):
   "capex_pct": <CapEx as % of revenue>,
   "da_pct": <D&A as % of revenue>,
   "wc_pct": <working capital change as % of revenue change, 1-5 typical>,
-  "wacc": <WACC % — reference beta and sector, typically 7-14>,
-  "terminal_growth": <terminal growth rate %, 1.5-3.5 typical>,
+  "wacc": <WACC % — reference beta and sector, typically 8-13. MUST be at least 3 points above terminal_growth>,
+  "terminal_growth": <terminal growth rate %, 1.5-3.0 typical. MUST be at least 3 points below wacc>,
   "explanations": {{
     "revenue_growth": "<1-2 sentences specific to {req.symbol}'s growth drivers>",
     "ebit_margin": "<1-2 sentences referencing actual margin history and trajectory>",
@@ -289,7 +283,15 @@ All percentages as plain numbers (e.g. 15 not 0.15). Be specific — mention {re
             messages=[{"role": "user", "content": prompt}],
         )
         text = msg.content[0].text.strip()
-        return _extract_json(text)
+        result = _extract_json(text)
+
+        # Safety clamp: WACC must always be > terminal_growth by at least 2 points
+        wacc = result.get("wacc") or 10.0
+        tg   = result.get("terminal_growth") or 2.5
+        if wacc - tg < 2:
+            result["terminal_growth"] = round(wacc - 3.0, 1)
+
+        return result
     except (json.JSONDecodeError, ValueError) as e:
         raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {str(e)}")
     except Exception as e:

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import axios from 'axios'
 import TickerAutocomplete from './TickerAutocomplete'
+import PortfolioChart from './PortfolioChart'
 
 const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 const STORAGE_KEY = 'finsight_portfolio'
@@ -473,6 +474,9 @@ export default function Portfolio({ onSelectStock }) {
       {/* ══════════ OVERVIEW TAB ══════════ */}
       {activeTab === 'overview' && metrics && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Performance chart */}
+          <PortfolioChart holdings={holdings} />
 
           {/* Charts row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

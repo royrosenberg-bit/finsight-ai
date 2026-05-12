@@ -10,6 +10,7 @@ export default function SearchBar({ onSearch, loading }) {
   const [activeSuggestion, setActiveSuggestion] = useState(-1)
   const debounceRef = useRef(null)
   const containerRef = useRef(null)
+  const inputRef = useRef(null)
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -20,6 +21,19 @@ export default function SearchBar({ onSearch, loading }) {
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Press "/" anywhere to focus search
+  useEffect(() => {
+    function handleGlobalKey(e) {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        inputRef.current?.focus()
+        inputRef.current?.select()
+      }
+    }
+    document.addEventListener('keydown', handleGlobalKey)
+    return () => document.removeEventListener('keydown', handleGlobalKey)
   }, [])
 
   function handleChange(e) {
@@ -83,11 +97,12 @@ export default function SearchBar({ onSearch, loading }) {
             color: 'var(--text-muted)', fontSize: '16px', pointerEvents: 'none',
           }}>🔍</span>
           <input
+            ref={inputRef}
             value={input}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
-            placeholder="Search stock symbol or name..."
+            placeholder="Search symbol or name…  /"
             disabled={loading}
             autoComplete="off"
             style={{
@@ -98,7 +113,6 @@ export default function SearchBar({ onSearch, loading }) {
             }}
             onMouseOver={e => e.target.style.borderColor = 'var(--border-light)'}
             onMouseOut={e => e.target.style.borderColor = showDropdown ? 'var(--accent)' : 'var(--border)'}
-            ref={el => { if (el) el.style.borderColor = showDropdown ? 'var(--accent)' : 'var(--border)' }}
           />
         </div>
         <button

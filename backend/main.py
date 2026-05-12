@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import stock, news, ai, history, indices, analysts, screener, earnings, search, whymove, portfolio_analyze, alerts, compare_fundamentals, dcf, movers, debate
+from routers import stock, news, ai, history, indices, analysts, screener, earnings, search, whymove, portfolio_analyze, portfolio_history, alerts, compare_fundamentals, dcf, movers, debate
 
 app = FastAPI(title="FinSight AI")
 
@@ -26,6 +26,7 @@ app.include_router(earnings.router, prefix="/api")
 app.include_router(search.router, prefix="/api")
 app.include_router(whymove.router, prefix="/api")
 app.include_router(portfolio_analyze.router, prefix="/api")
+app.include_router(portfolio_history.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(compare_fundamentals.router, prefix="/api")
 app.include_router(dcf.router, prefix="/api")

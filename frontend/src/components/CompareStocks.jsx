@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts'
 import axios from 'axios'
 import TickerAutocomplete from './TickerAutocomplete'
 
@@ -239,11 +239,15 @@ export default function CompareStocks() {
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                     <XAxis dataKey="date" interval={tickInterval} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={50} />
-                    <Tooltip formatter={(val) => `${val}%`} contentStyle={{ background: '#1e2235', border: '1px solid var(--border)', borderRadius: 8 }} />
+                    <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v > 0 ? '+' : ''}${v}%`} width={54} />
+                    <ReferenceLine y={0} stroke="var(--border-light)" strokeDasharray="4 3" />
+                    <Tooltip
+                      formatter={(val, name) => [`${val > 0 ? '+' : ''}${val}%`, name]}
+                      contentStyle={{ background: '#1a1f35', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                    />
                     <Legend wrapperStyle={{ fontSize: 13 }} />
                     {symbols.map((sym, i) => (
-                      <Line key={sym} type="monotone" dataKey={sym} stroke={COLORS[i]} strokeWidth={2} dot={false} />
+                      <Line key={sym} type="monotone" dataKey={sym} stroke={COLORS[i]} strokeWidth={2.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
                     ))}
                   </LineChart>
                 </ResponsiveContainer>

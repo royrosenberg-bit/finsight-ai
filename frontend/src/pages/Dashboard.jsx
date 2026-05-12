@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import StockCard from '../components/StockCard'
 import { CardSkeleton } from '../components/Skeleton'
+import SectorHeatmap from '../components/SectorHeatmap'
 
 const API = 'https://finsight-ai-backend-imxn.onrender.com/api'
 
@@ -137,6 +138,11 @@ export default function Dashboard({ onSelectStock }) {
                 ))
           }
         </div>
+      </section>
+
+      {/* ── Sector Heatmap ───────────────────────────────────────── */}
+      <section>
+        <SectorHeatmap />
       </section>
 
       {/* ── Section A: Market-Wide Movers ─────────────────────────── */}
